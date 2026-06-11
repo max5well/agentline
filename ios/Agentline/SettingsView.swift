@@ -7,9 +7,9 @@ struct SettingsView: View {
     @AppStorage("handoff.includeTranscript") private var shareTranscriptAfterCalls = false
     @AppStorage("defaultLanguage") private var defaultLanguage = "English"
     @State private var auth = AuthStore.shared
-    @State private var toolStates: [String: Bool] = Dictionary(
-        uniqueKeysWithValues: ConnectedToolsStore.all.map { ($0.id, $0.connected) }
-    )
+    @State private var connections = ToolConnections()
+    @State private var connectingTool: String?
+    @State private var showDriveInfo = false
 
     var body: some View {
         NavigationStack {
@@ -48,7 +48,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Connected tools")
                 } footer: {
-                    Text("Connected tools appear as “Send to” options on every call summary.")
+                    Text("Connected tools appear as “Send to” options on every call summary. MCP also receives every call automatically.")
                 }
 
                 Section("Defaults") {
@@ -112,15 +112,36 @@ struct SettingsView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
+            .task { await connections.refresh() }
+            .sheet(item: Binding(
+                get: { connectingTool.map { ToolSheetID(id: $0) } },
+                set: { connectingTool = $0?.id }
+            )) { sheet in
+                if sheet.id == "obsidian" {
+                    ObsidianConnectSheet { Task { await connections.refresh() } }
+                } else {
+                    MCPConnectSheet(existing: connections.mcpConnection) {
+                        Task { await connections.refresh() }
+                    }
+                }
+            }
+            .alert("Google Drive", isPresented: $showDriveInfo) {
+                Button("OK") {}
+            } message: {
+                Text("Drive export needs a Google Cloud OAuth client — it's the next connector on the roadmap.")
+            }
         }
     }
 
+    private struct ToolSheetID: Identifiable { let id: String }
+
     private func toolRow(_ tool: ConnectedTool) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: tool.icon)
-                .font(.title3)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 30)
+            Image(tool.logo)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(tool.name)
                 Text(tool.blurb)
@@ -129,17 +150,14 @@ struct SettingsView: View {
             }
             Spacer()
             Button {
-                let newValue = !(toolStates[tool.id] ?? false)
-                toolStates[tool.id] = newValue
-                tool.connected = newValue
+                if tool.id == "drive" { showDriveInfo = true } else { connectingTool = tool.id }
             } label: {
-                Text((toolStates[tool.id] ?? false) ? "Connected" : "Connect")
+                Text(connections.isConnected(tool.id) ? "Connected" : "Connect")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle((toolStates[tool.id] ?? false) ? .green : Color.accentColor)
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
-            .tint((toolStates[tool.id] ?? false) ? .green : .accentColor)
+            .tint(connections.isConnected(tool.id) ? .green : .accentColor)
         }
     }
 

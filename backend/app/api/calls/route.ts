@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { distillMemory, summarizeCall } from "@/lib/summarize";
 import { classOf, getProfile, monthUsage, remainingQuota, OVERAGE_CENTS_PER_MIN } from "@/lib/billing";
+import { callMCPTool } from "@/lib/mcp";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
@@ -64,6 +65,31 @@ export async function POST(req: NextRequest) {
         .from("calls")
         .update({ summary: digest.summary, intents: digest.intents })
         .eq("id", data.id);
+      // MCP handoff (stage 1): push the digest to the user's chosen tool.
+      if (auth.userId) {
+        const { data: mcp } = await supabase()
+          .from("mcp_connections")
+          .select("url, auth_token, tool_name")
+          .eq("user_id", auth.userId)
+          .maybeSingle();
+        if (mcp?.tool_name) {
+          try {
+            await callMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
+              title: `Call with ${agentName}`,
+              date: startedAt,
+              summary: digest.summary,
+              actionItems: digest.intents,
+              transcript: (transcript ?? [])
+                .map((e: { role: string; text: string }) =>
+                  `${e.role === "user" ? "Max" : agentName}: ${e.text}`)
+                .join("\n"),
+            });
+          } catch (e) {
+            console.error("MCP handoff failed", e);
+          }
+        }
+      }
+
       // Roll the call into the agent's memory file (DESIGN-SPEC §3.10).
       if (agent?.memory_enabled) {
         const file = await distillMemory(

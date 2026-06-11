@@ -31,6 +31,7 @@ targets:
         # Google SSO returns the Supabase session via this scheme (ADR-6).
         CFBundleURLTypes:
           - CFBundleURLSchemes: [agentline]
+        LSApplicationQueriesSchemes: [obsidian]
     settings:
       base:
         DEVELOPMENT_TEAM: BF275FGFBQ

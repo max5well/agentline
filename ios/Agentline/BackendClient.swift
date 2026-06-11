@@ -200,6 +200,34 @@ struct BackendClient {
         _ = try await request("/api/agents", method: "POST", body: agent)
     }
 
+    func mcpStatus() async throws -> MCPConnection? {
+        struct Wrapper: Codable { let connection: MCPConnection? }
+        let data = try await request("/api/mcp")
+        return try Self.decoder.decode(Wrapper.self, from: data).connection
+    }
+
+    func mcpConnect(url: String, authToken: String) async throws -> (serverName: String, tools: [MCPTool]) {
+        struct Body: Encodable { let url: String; let authToken: String }
+        struct Response: Codable { let serverName: String; let tools: [MCPTool] }
+        let data = try await request("/api/mcp", method: "POST", body: Body(url: url, authToken: authToken))
+        let r = try Self.decoder.decode(Response.self, from: data)
+        return (r.serverName, r.tools)
+    }
+
+    func mcpSelectTool(_ name: String) async throws {
+        struct Body: Encodable { let toolName: String }
+        _ = try await request("/api/mcp", method: "PATCH", body: Body(toolName: name))
+    }
+
+    func mcpDisconnect() async throws {
+        _ = try await request("/api/mcp", method: "DELETE")
+    }
+
+    func mcpPush(callId: UUID) async throws {
+        struct Body: Encodable { let callId: UUID }
+        _ = try await request("/api/mcp/push", method: "POST", body: Body(callId: callId))
+    }
+
     func voicePreview(voice: String, style: String?) async throws -> Data {
         struct Body: Encodable { let voice: String; let style: String? }
         return try await request("/api/voice-preview", method: "POST", body: Body(voice: voice, style: style))

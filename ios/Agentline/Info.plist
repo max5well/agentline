@@ -29,6 +29,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>obsidian</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>agentline needs the microphone for voice calls with your agents.</string>
 	<key>UIBackgroundModes</key>

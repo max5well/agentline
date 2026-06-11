@@ -8,6 +8,10 @@ struct CallSummaryView: View {
 
     @State private var checked: Set<String> = []
     @State private var transcriptOpen = false
+    @State private var mcpConnected = false
+    @State private var mcpBusy = false
+    @State private var mcpStatus: String?
+    @AppStorage("handoff.includeTranscript") private var includeTranscript = false
 
     var body: some View {
         List {
@@ -42,10 +46,24 @@ struct CallSummaryView: View {
             }
 
             Section {
-                ForEach(ConnectedToolsStore.connected) { tool in
-                    Button {} label: {
-                        Label(tool.sendLabel, systemImage: tool.icon)
+                if ObsidianConnector.isConnected {
+                    Button {
+                        ObsidianConnector.save(record: record, agent: agent,
+                                               includeTranscript: includeTranscript)
+                    } label: {
+                        sendRow("Save to Obsidian", logo: "ObsidianLogo")
                     }
+                }
+                if mcpConnected {
+                    Button {
+                        Task { await pushToMCP() }
+                    } label: {
+                        HStack {
+                            sendRow(mcpStatus ?? "Send via MCP", logo: "MCPLogo")
+                            if mcpBusy { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(mcpBusy)
                 }
                 ShareLink(item: shareText) {
                     Label("Share transcript…", systemImage: "square.and.arrow.up")
@@ -53,7 +71,9 @@ struct CallSummaryView: View {
             } header: {
                 Text("Send to")
             } footer: {
-                Text("Connected tools are managed in Settings.")
+                Text(mcpConnected
+                     ? "MCP receives every call automatically — this re-sends it. Tools are managed in Settings."
+                     : "Connected tools are managed in Settings.")
             }
 
             Section {
@@ -77,6 +97,9 @@ struct CallSummaryView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Call Summary")
+        .task {
+            mcpConnected = (try? await AppStore.backendIfConfigured()?.mcpStatus())??.toolName != nil
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -105,6 +128,30 @@ struct CallSummaryView: View {
             parts.append(String(format: "€%.2f", Double(cents) / 100))
         }
         return parts.joined(separator: " · ")
+    }
+
+    private func sendRow(_ title: String, logo: String) -> some View {
+        HStack(spacing: 12) {
+            Image(logo)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            Text(title)
+                .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    private func pushToMCP() async {
+        guard let backend = AppStore.backendIfConfigured() else { return }
+        mcpBusy = true
+        do {
+            try await backend.mcpPush(callId: record.id)
+            mcpStatus = "Sent ✓"
+        } catch {
+            mcpStatus = "Failed — \(error.localizedDescription)"
+        }
+        mcpBusy = false
     }
 
     private var shareText: String {
