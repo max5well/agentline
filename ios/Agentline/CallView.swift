@@ -15,6 +15,7 @@ struct CallView: View {
     @State private var partialCaption: String?
     @State private var showTranscript = false
     @State private var activity: Activity<CallActivityAttributes>?
+    @State private var finishing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -150,6 +151,10 @@ struct CallView: View {
     }
 
     private func endAndDismiss() async {
+        // Reachable from the hang-up button, the session's .ended event,
+        // and CallKit's end action — exactly one may save the call.
+        guard !finishing else { return }
+        finishing = true
         if let activity {
             let content = ActivityContent(
                 state: CallActivityAttributes.ContentState(stateLabel: "Ended", startedAt: startedAt),

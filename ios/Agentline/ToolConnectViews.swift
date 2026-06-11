@@ -7,14 +7,38 @@ struct ObsidianConnectSheet: View {
     @State private var vault = ObsidianConnector.vault
     let onChange: () -> Void
 
+    private var obsidianInstalled: Bool {
+        UIApplication.shared.canOpenURL(URL(string: "obsidian://")!)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if !obsidianInstalled {
+                    Section {
+                        Label("Obsidian isn't installed on this iPhone", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                        Link("Get Obsidian from the App Store",
+                             destination: URL(string: "https://apps.apple.com/app/obsidian-connected-notes/id1557175442")!)
+                    }
+                }
                 Section {
                     TextField("Vault name", text: $vault)
                         .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                 } footer: {
-                    Text("The exact name of your Obsidian vault. \"Save to Obsidian\" on a call summary opens the Obsidian app and creates the note there.")
+                    Text("The vault name is shown at the bottom of Obsidian's sidebar (tap the vault switcher). It must match exactly, including spaces.")
+                }
+
+                Section {
+                    Button {
+                        sendTestNote()
+                    } label: {
+                        Label("Send test note", systemImage: "paperplane")
+                    }
+                    .disabled(vault.trimmingCharacters(in: .whitespaces).isEmpty || !obsidianInstalled)
+                } footer: {
+                    Text("Opens Obsidian and creates \"agentline test\" in the vault above. If Obsidian shows a vault error, the name doesn't match.")
                 }
                 if ObsidianConnector.isConnected {
                     Section {
@@ -28,6 +52,10 @@ struct ObsidianConnectSheet: View {
                 }
             }
             .navigationTitle("Connect Obsidian")
+            .onAppear {
+                // Saving the vault from the test flow shouldn't require Save.
+                if vault.isEmpty { vault = ObsidianConnector.vault }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -43,6 +71,23 @@ struct ObsidianConnectSheet: View {
                     .disabled(vault.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+        }
+    }
+}
+
+extension ObsidianConnectSheet {
+    private func sendTestNote() {
+        let trimmed = vault.trimmingCharacters(in: .whitespaces)
+        ObsidianConnector.vault = trimmed
+        onChange()
+        var components = URLComponents(string: "obsidian://new")!
+        components.queryItems = [
+            URLQueryItem(name: "vault", value: trimmed),
+            URLQueryItem(name: "name", value: "agentline test"),
+            URLQueryItem(name: "content", value: "If you can read this, agentline is connected to this vault. You can delete this note."),
+        ]
+        if let url = components.url {
+            UIApplication.shared.open(url)
         }
     }
 }
