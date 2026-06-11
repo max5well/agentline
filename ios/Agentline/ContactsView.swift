@@ -35,6 +35,12 @@ struct ContactsView: View {
             .fullScreenCover(item: $activeCall) { agent in
                 CallView(agent: agent, session: MockVoiceSession())
             }
+            .onAppear {
+                // UI-test hook: launch directly into a mock call.
+                if ProcessInfo.processInfo.arguments.contains("-autocall") {
+                    activeCall = agents.first
+                }
+            }
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
