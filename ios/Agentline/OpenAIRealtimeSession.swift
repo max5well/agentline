@@ -1,5 +1,8 @@
 import Foundation
+import OSLog
 import WebRTC
+
+private let log = Logger(subsystem: "dev.max5well.Agentline", category: "realtime")
 
 // Launch provider (ADR-2 impl #1): WebRTC straight to OpenAI Realtime with
 // an ephemeral client secret minted by the backend (ADR-3). The agent's
@@ -32,15 +35,37 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
 
         // CallKit first: it owns the audio session (manual audio mode) and
         // activates it via the provider delegate once the call is reported.
-        RTCAudioSession.sharedInstance().useManualAudio = true
-        RTCAudioSession.sharedInstance().isAudioEnabled = false
-        CallKitController.shared.onMuteChanged = { [weak self] muted in
-            self?.audioTrack?.isEnabled = !muted
+        // The simulator has no call service — CallKit accepts the call and
+        // then resets it, killing the session. Skip it there and let WebRTC
+        // manage the audio session itself. Same fallback if CallKit throws
+        // (e.g. running as Designed-for-iPhone on Mac).
+        #if targetEnvironment(simulator)
+        // Configure the audio session before WebRTC initializes its
+        // voice-processing unit — uninitialized sessions abort in the
+        // simulator's audio stack (CoreAudio RPC timeout).
+        let rtcSession = RTCAudioSession.sharedInstance()
+        rtcSession.useManualAudio = false
+        rtcSession.lockForConfiguration()
+        try? rtcSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
+        try? rtcSession.setActive(true)
+        rtcSession.unlockForConfiguration()
+        #else
+        do {
+            RTCAudioSession.sharedInstance().useManualAudio = true
+            RTCAudioSession.sharedInstance().isAudioEnabled = false
+            CallKitController.shared.onMuteChanged = { [weak self] muted in
+                self?.audioTrack?.isEnabled = !muted
+            }
+            CallKitController.shared.onCallEnded = { [weak self] in
+                Task { await self?.end() }
+            }
+            callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+        } catch {
+            log.error("CallKit unavailable, continuing without: \(error, privacy: .public)")
+            RTCAudioSession.sharedInstance().useManualAudio = false
+            callId = nil
         }
-        CallKitController.shared.onCallEnded = { [weak self] in
-            Task { await self?.end() }
-        }
-        callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+        #endif
 
         do {
             let token = try await backend.mintRealtimeToken(agentId: agent.id)
@@ -48,6 +73,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
             if let callId { CallKitController.shared.reportConnected(callId) }
             continuation.yield(.state(.listening))
         } catch {
+            log.error("connect failed: \(error, privacy: .public)")
             continuation.yield(.error("Could not connect: \(error.localizedDescription)"))
             await end()
             throw error
@@ -100,7 +126,12 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         audioTrack?.isEnabled = !muted
     }
 
+    private var hasEnded = false
+
     func end() async {
+        guard !hasEnded else { return }
+        hasEnded = true
+        log.info("session end() called")
         CallKitController.shared.onCallEnded = nil
         CallKitController.shared.endCall()
         dataChannel?.close()
@@ -117,6 +148,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private func handleServerEvent(_ data: Data) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = json["type"] as? String else { return }
+        log.debug("server event: \(type, privacy: .public)")
         let elapsed = startedAt.map { Date().timeIntervalSince($0) } ?? 0
 
         switch type {
@@ -160,6 +192,7 @@ extension OpenAIRealtimeSession: RTCDataChannelDelegate {
 
 extension OpenAIRealtimeSession: RTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        log.info("ICE state: \(newState.rawValue)")
         switch newState {
         case .disconnected:
             continuation.yield(.state(.reconnecting))
