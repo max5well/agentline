@@ -2,9 +2,9 @@ import Foundation
 
 struct BackendConfig {
     var baseURL = URL(string: "http://localhost:3000")!
-    var appSecret = ""
+    var hasExplicitURL = false
 
-    var isConfigured: Bool { !appSecret.isEmpty }
+    var isConfigured: Bool { hasExplicitURL }
 
     // Settings screen (UserDefaults) wins; scheme environment is the
     // dev fallback — scheme edits don't survive xcodegen regeneration.
@@ -16,9 +16,8 @@ struct BackendConfig {
             ?? env["AGENTLINE_BACKEND_URL"]
         if let url = urlString.flatMap(URL.init(string:)) {
             config.baseURL = url
+            config.hasExplicitURL = true
         }
-        config.appSecret = defaults.string(forKey: "backend.secret").flatMap { $0.isEmpty ? nil : $0 }
-            ?? env["AGENTLINE_APP_SECRET"] ?? ""
         return config
     }
 }
@@ -32,6 +31,18 @@ struct RealtimeToken: Codable {
     // so the backend hands the config over. OpenAI bakes it into the secret.
     let instructions: String?
     let voice: String?
+}
+
+enum AuthError: LocalizedError {
+    case signedOut
+    case server(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut: "Signed out"
+        case .server(let message): message
+        }
+    }
 }
 
 struct BackendClient {
@@ -60,20 +71,96 @@ struct BackendClient {
         return e
     }()
 
-    private func request(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
+    // MARK: - Requests
+
+    private func bareRequest(_ path: String, method: String, body: Encodable?, bearer: String?) async throws -> (Data, Int) {
         var req = URLRequest(url: config.baseURL.appending(path: path))
         req.httpMethod = method
-        req.setValue(config.appSecret, forHTTPHeaderField: "x-app-secret")
+        if let bearer {
+            req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try Self.encoder.encode(body)
         }
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        return (data, status)
+    }
+
+    // Authenticated request (ADR-6): bearer token from the Keychain,
+    // refreshed when expiring or on a 401, one retry, signed out when the
+    // refresh token is dead too.
+    private func request(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
+        guard var session = KeychainSession.load() else { throw AuthError.signedOut }
+        if session.expiresAt.timeIntervalSinceNow < 60 {
+            session = try await refresh(session)
         }
+
+        var (data, status) = try await bareRequest(path, method: method, body: body, bearer: session.accessToken)
+        if status == 401 {
+            session = try await refresh(session)
+            (data, status) = try await bareRequest(path, method: method, body: body, bearer: session.accessToken)
+        }
+        guard (200..<300).contains(status) else { throw URLError(.badServerResponse) }
         return data
     }
+
+    private func refresh(_ session: AuthSession) async throws -> AuthSession {
+        struct Body: Encodable { let refreshToken: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/refresh", method: "POST",
+            body: Body(refreshToken: session.refreshToken), bearer: nil
+        )
+        guard (200..<300).contains(status),
+              let response = try? Self.decoder.decode(SessionResponse.self, from: data) else {
+            KeychainSession.clear()
+            throw AuthError.signedOut
+        }
+        let refreshed = response.session
+        KeychainSession.save(refreshed)
+        return refreshed
+    }
+
+    // MARK: - Auth (no bearer; these mint the session)
+
+    private func authRequest(_ path: String, body: Encodable) async throws -> AuthSession {
+        let (data, status) = try await bareRequest(path, method: "POST", body: body, bearer: nil)
+        guard (200..<300).contains(status) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Request failed (\(status))")
+        }
+        return try Self.decoder.decode(SessionResponse.self, from: data).session
+    }
+
+    func signUp(email: String, password: String) async throws -> AuthSession {
+        struct Body: Encodable { let email, password: String }
+        return try await authRequest("/api/auth/signup", body: Body(email: email, password: password))
+    }
+
+    func logIn(email: String, password: String) async throws -> AuthSession {
+        struct Body: Encodable { let email, password: String }
+        return try await authRequest("/api/auth/login", body: Body(email: email, password: password))
+    }
+
+    func exchangeSSO(provider: String, idToken: String, nonce: String?) async throws -> AuthSession {
+        struct Body: Encodable { let provider, idToken: String; let nonce: String? }
+        return try await authRequest("/api/auth/sso", body: Body(provider: provider, idToken: idToken, nonce: nonce))
+    }
+
+    // The Supabase URL, needed for the Google web-OAuth flow.
+    func supabaseURL() async throws -> URL {
+        struct Config: Codable { let supabaseUrl: String? }
+        let (data, status) = try await bareRequest("/api/auth/config", method: "GET", body: nil, bearer: nil)
+        guard (200..<300).contains(status),
+              let url = (try? Self.decoder.decode(Config.self, from: data))?.supabaseUrl.flatMap(URL.init(string:)) else {
+            throw URLError(.badServerResponse)
+        }
+        return url
+    }
+
+    // MARK: - Data
 
     func agents() async throws -> [Agent] {
         struct Wrapper: Codable { let agents: [Agent] }

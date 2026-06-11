@@ -149,7 +149,8 @@ struct ContactsView: View {
 
     static func backendIfConfigured() -> BackendClient? {
         let config = BackendConfig.current
-        return config.isConfigured ? BackendClient(config: config) : nil
+        guard config.isConfigured, KeychainSession.load() != nil else { return nil }
+        return BackendClient(config: config)
     }
 
     // Live data when the backend is configured; sample fixtures otherwise.

@@ -6,38 +6,49 @@ struct SettingsView: View {
     @AppStorage("handoff.askAfterCall") private var askAfterCall = true
     @AppStorage("handoff.includeTranscript") private var includeTranscript = false
     @AppStorage("backend.url") private var backendURL = ""
-    @AppStorage("backend.secret") private var backendSecret = ""
+    @State private var auth = AuthStore.shared
     @State private var tools = HandoffTool.all
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 sectionLabel("Backend")
-                Text(BackendConfig.current.isConfigured
-                     ? "Connected — calls use the real voice provider."
-                     : "Not configured — calls run in demo mode with a scripted agent and no audio.")
+                Text(connectionBlurb)
                     .font(.subheadline)
                     .lineSpacing(3)
-                    .foregroundStyle(BackendConfig.current.isConfigured ? Color(hex: 0x93D7AA) : Theme.danger)
+                    .foregroundStyle(BackendConfig.current.isConfigured && auth.session != nil ? Color(hex: 0x93D7AA) : Theme.danger)
                     .padding(.horizontal, 8)
                     .padding(.bottom, 12)
-                VStack(spacing: 0) {
-                    TextField("Backend URL", text: $backendURL, prompt: Text("https://agentline-chi.vercel.app"))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .padding(.horizontal, 16)
-                        .frame(height: 54)
-                    Divider().overlay(Color.white.opacity(0.075))
-                    SecureField("App secret", text: $backendSecret)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 16)
-                        .frame(height: 54)
+                TextField("Backend URL", text: $backendURL, prompt: Text("https://agentline-chi.vercel.app"))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .padding(.horizontal, 16)
+                    .frame(height: 54)
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.text)
+                    .glassCard()
+
+                if let session = auth.session {
+                    sectionLabel("Account")
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.email ?? "Signed in")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Theme.text)
+                            Text("Agents and call history belong to this account.")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.muted)
+                        }
+                        Spacer()
+                        Button("Sign out") { auth.signOut() }
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(Theme.danger)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 64)
+                    .glassCard()
                 }
-                .font(.system(size: 16))
-                .foregroundStyle(Theme.text)
-                .glassCard()
 
                 sectionLabel("Connected tools")
                 Text("Connect destinations that can receive call summaries and transcripts after each call.")
@@ -68,6 +79,15 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
+    }
+
+    private var connectionBlurb: String {
+        if !BackendConfig.current.isConfigured {
+            return "Not configured — calls run in demo mode with a scripted agent and no audio."
+        }
+        return auth.session != nil
+            ? "Connected — calls use the real voice provider."
+            : "Signed out — sign in to load your agents and place calls."
     }
 
     private func toolRow(_ tool: Binding<HandoffTool>) -> some View {
