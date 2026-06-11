@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAppSecret } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
-  const denied = requireAppSecret(req);
-  if (denied) return denied;
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
 
-  const { data, error } = await supabase()
+  let query = supabase()
     .from("agents")
     .select("*")
     .order("created_at", { ascending: true });
+  if (auth.userId) query = query.eq("user_id", auth.userId);
+
+  const { data, error } = await query;
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ agents: data });
 }
 
 export async function POST(req: NextRequest) {
-  const denied = requireAppSecret(req);
-  if (denied) return denied;
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
 
   const body = await req.json();
   const { name, persona } = body;
@@ -29,7 +32,17 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert: the app creates agents with its own UUID and edits them
-  // through the same endpoint.
+  // through the same endpoint — so an existing id must belong to the caller.
+  if (body.id && auth.userId) {
+    const { data: existing } = await supabase()
+      .from("agents")
+      .select("user_id")
+      .eq("id", body.id)
+      .maybeSingle();
+    if (existing && existing.user_id !== auth.userId)
+      return NextResponse.json({ error: "not your agent" }, { status: 403 });
+  }
+
   const row: Record<string, unknown> = {
     name,
     persona,
@@ -41,6 +54,7 @@ export async function POST(req: NextRequest) {
     updated_at: new Date().toISOString(),
   };
   if (body.id) row.id = body.id;
+  if (auth.userId) row.user_id = auth.userId;
   // Migration 0003 columns — only written when the app sends them, so the
   // route keeps working against a database that hasn't run 0003 yet.
   if (body.voice_style !== undefined) row.voice_style = body.voice_style;

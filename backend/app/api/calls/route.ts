@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAppSecret } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { summarizeCall } from "@/lib/summarize";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
 export async function POST(req: NextRequest) {
-  const denied = requireAppSecret(req);
-  if (denied) return denied;
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
 
   const body = await req.json();
   const { agentId, provider, startedAt, endedAt, transcript } = body;
@@ -18,16 +18,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // The call must reference the caller's own agent.
+  if (auth.userId) {
+    const { data: agent } = await supabase()
+      .from("agents")
+      .select("user_id")
+      .eq("id", agentId)
+      .maybeSingle();
+    if (!agent || agent.user_id !== auth.userId)
+      return NextResponse.json({ error: "not your agent" }, { status: 403 });
+  }
+
+  const row: Record<string, unknown> = {
+    agent_id: agentId,
+    provider,
+    started_at: startedAt,
+    ended_at: endedAt ?? null,
+    transcript: transcript ?? [],
+    cost_cents: body.costCents ?? null,
+  };
+  if (auth.userId) row.user_id = auth.userId;
+
   const { data, error } = await supabase()
     .from("calls")
-    .insert({
-      agent_id: agentId,
-      provider,
-      started_at: startedAt,
-      ended_at: endedAt ?? null,
-      transcript: transcript ?? [],
-      cost_cents: body.costCents ?? null,
-    })
+    .insert(row)
     .select("id, agents(name)")
     .single();
   if (error)
@@ -52,8 +66,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const denied = requireAppSecret(req);
-  if (denied) return denied;
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
 
   const agentId = req.nextUrl.searchParams.get("agentId");
   let query = supabase()
@@ -63,6 +77,7 @@ export async function GET(req: NextRequest) {
     )
     .order("started_at", { ascending: false })
     .limit(50);
+  if (auth.userId) query = query.eq("user_id", auth.userId);
   if (agentId) query = query.eq("agent_id", agentId);
 
   const { data, error } = await query;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAppSecret } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
 // Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
@@ -48,8 +48,8 @@ function buildInstructions(agent: any, memory: string): string {
 // ephemeral token plus the session config the app sends in its setup
 // message. Either way the raw API key never leaves the backend.
 export async function POST(req: NextRequest) {
-  const denied = requireAppSecret(req);
-  if (denied) return denied;
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
 
   const { agentId } = await req.json();
   if (!agentId)
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     .select("*")
     .eq("id", agentId)
     .single();
-  if (error || !agent)
+  if (error || !agent || (auth.userId && agent.user_id !== auth.userId))
     return NextResponse.json({ error: "agent not found" }, { status: 404 });
 
   const tierModel = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
