@@ -2,22 +2,47 @@ import SwiftUI
 
 struct ContactsView: View {
     @State private var agents: [Agent] = Agent.samples
+    @State private var records: [CallRecord] = CallRecord.samples
     @State private var activeCall: Agent?
+    @State private var editing: EditorTarget?
+    @State private var path = NavigationPath()
+
+    enum Route: Hashable {
+        case history
+        case settings
+    }
+
+    // Distinguishes "new agent" from "edit agent" for the sheet item.
+    struct EditorTarget: Identifiable {
+        let id = UUID()
+        let agent: Agent?
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("AGENTS")
-                        .font(.caption2.weight(.semibold))
-                        .kerning(1.4)
-                        .foregroundStyle(Theme.text.opacity(0.5))
-                        .padding(.horizontal, 8)
-
+                VStack(alignment: .leading, spacing: 0) {
+                    navRow
+                    if !recents.isEmpty {
+                        sectionLabel("Recents")
+                        VStack(spacing: 0) {
+                            ForEach(recents, id: \.record.id) { item in
+                                NavigationLink(value: item.record) {
+                                    RecentRow(record: item.record, agent: item.agent)
+                                }
+                                if item.record.id != recents.last?.record.id {
+                                    Divider().overlay(Color.white.opacity(0.075))
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .glassCard()
+                    }
+                    sectionLabel("Agents")
                     VStack(spacing: 0) {
                         ForEach(agents) { agent in
                             Button { activeCall = agent } label: {
-                                ContactRow(agent: agent)
+                                ContactRow(agent: agent) { editing = EditorTarget(agent: agent) }
                             }
                             if agent.id != agents.last?.id {
                                 Divider().overlay(Color.white.opacity(0.075))
@@ -31,24 +56,99 @@ struct ContactsView: View {
                 .padding(20)
             }
             .background(Theme.bg)
-            .navigationTitle("agentline")
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .history: HistoryView(records: records, agents: agents)
+                case .settings: SettingsView()
+                }
+            }
+            .navigationDestination(for: CallRecord.self) { record in
+                CallSummaryView(record: record, agent: agent(for: record))
+            }
             .fullScreenCover(item: $activeCall) { agent in
                 CallView(agent: agent, session: MockVoiceSession())
             }
-            .onAppear {
-                // UI-test hook: launch directly into a mock call.
-                if ProcessInfo.processInfo.arguments.contains("-autocall") {
-                    activeCall = agents.first
+            .sheet(item: $editing) { target in
+                AgentEditorView(agent: target.agent) { saved in
+                    if let idx = agents.firstIndex(where: { $0.id == saved.id }) {
+                        agents[idx] = saved
+                    } else {
+                        agents.append(saved)
+                    }
                 }
             }
+            .onAppear(perform: handleLaunchArguments)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
+    }
+
+    private var navRow: some View {
+        HStack(spacing: 10) {
+            (Text("agent").foregroundStyle(Theme.text) + Text("line").foregroundStyle(Theme.accent))
+                .font(.system(size: 34, weight: .bold))
+                .kerning(-1.2)
+            Spacer()
+            circleButton("clock.arrow.circlepath") { path.append(Route.history) }
+            circleButton("gearshape") { path.append(Route.settings) }
+            circleButton("plus") { editing = EditorTarget(agent: nil) }
+        }
+        .padding(.bottom, 12)
+    }
+
+    private func circleButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 48, height: 48)
+                .background(Color.white.opacity(0.07), in: Circle())
+                .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
+        }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.caption2.weight(.semibold))
+            .kerning(1.4)
+            .foregroundStyle(Theme.text.opacity(0.5))
+            .padding(.horizontal, 8)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+    }
+
+    private var recents: [(record: CallRecord, agent: Agent)] {
+        records.sorted { $0.startedAt > $1.startedAt }
+            .prefix(2)
+            .map { ($0, agent(for: $0)) }
+    }
+
+    private func agent(for record: CallRecord) -> Agent {
+        agents.first { $0.id == record.agentId }
+            ?? Agent(id: record.agentId, name: "Unknown", emoji: "👤", persona: "", voice: "marin", tier: .fast, memoryEnabled: false)
+    }
+
+    // UI-test hooks: jump straight to a screen so simctl can screenshot it.
+    private func handleLaunchArguments() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-autocall") {
+            activeCall = agents.first
+        } else if args.contains("-screen-history") {
+            path.append(Route.history)
+        } else if args.contains("-screen-settings") {
+            path.append(Route.settings)
+        } else if args.contains("-screen-summary"), let record = records.first {
+            path.append(record)
+        } else if args.contains("-screen-editor") {
+            editing = EditorTarget(agent: agents.first)
+        }
     }
 }
 
 struct ContactRow: View {
     let agent: Agent
+    var onInfo: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -87,16 +187,71 @@ struct ContactRow: View {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .stroke(Theme.accent.opacity(0.38), lineWidth: 1)
                 )
+
+            Button(action: onInfo) {
+                Image(systemName: "info")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .frame(width: 26, height: 26)
+                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
         .frame(minHeight: 68)
         .contentShape(Rectangle())
     }
 }
 
-extension Agent {
-    static let samples: [Agent] = [
-        .init(id: UUID(), name: "Maya", emoji: "📜", persona: "Modern history tutor. Socratic, opinionated, concrete.", voice: "marin", tier: .big, memoryEnabled: true),
-        .init(id: UUID(), name: "Marco", emoji: "🌱", persona: "Startup sparring partner. Challenges every assumption.", voice: "cedar", tier: .fast, memoryEnabled: true),
-        .init(id: UUID(), name: "Elena", emoji: "🗣️", persona: "Spanish coach. Conversational immersion, gentle corrections.", voice: "marin", tier: .fast, memoryEnabled: true),
-    ]
+struct RecentRow: View {
+    let record: CallRecord
+    let agent: Agent
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Theme.accent.opacity(0.7), Color(hex: 0x393228).opacity(0.8)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                Text(agent.emoji).font(.system(size: 26))
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(agent.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Text(agent.persona.components(separatedBy: ".").first ?? "")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(timeLabel)
+                .font(.footnote)
+                .foregroundStyle(Theme.muted)
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+        }
+        .frame(minHeight: 68)
+        .contentShape(Rectangle())
+    }
+
+    private var timeLabel: String {
+        if Calendar.current.isDateInToday(record.startedAt) {
+            return record.startedAt.formatted(date: .omitted, time: .shortened)
+        }
+        if Calendar.current.isDateInYesterday(record.startedAt) {
+            return "Yesterday"
+        }
+        return record.startedAt.formatted(.dateTime.weekday(.abbreviated))
+    }
 }

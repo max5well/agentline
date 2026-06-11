@@ -4,16 +4,23 @@ SwiftUI + CallKit + WebRTC. Design reference: [agentline-design/screens](https:/
 
 ## Status
 
-Source skeleton written, **not yet compiled** (Xcode not installed on this machine yet). First build will likely need minor fixes.
+Builds and runs in the simulator on MockVoiceSession.
 
 - `Theme.swift` — design tokens from the final screens (brass #C59B5C on #050607), glass card modifier
 - `Models.swift` — Agent, CallRecord, TranscriptEntry, Tier (matches Supabase schema)
 - `VoiceSession.swift` — the provider protocol (ADR-2)
 - `MockVoiceSession.swift` — fake session cycling through all call states for simulator dev
 - `BackendClient.swift` — token minting, agents, call records against the backend
-- `ContactsView.swift`, `CallView.swift` — contacts home and in-call screen with the animated orb
+- `ContactsView.swift`, `CallView.swift` — contacts home (recents + agents) and in-call screen with the animated orb
+- `AgentEditorView.swift` — create/edit agent: emoji avatar, persona, voice, brain tier, memory
+- `HistoryView.swift` — date-grouped call history with search
+- `CallSummaryView.swift` — summary, action items, handoff buttons, expandable transcript
+- `SettingsView.swift` — connected handoff tools + default handoff toggles
+- `SampleData.swift` — fixture agents and call records (stable UUIDs)
 
-Not started: OpenAIRealtimeSession (WebRTC), CallKit integration, agent editor, history, post-call summary screen, Live Activity.
+All screens build and were verified in the simulator against MockVoiceSession. Screen hooks for headless screenshots: launch with `-autocall`, `-screen-editor`, `-screen-history`, `-screen-summary`, or `-screen-settings`.
+
+Not started: OpenAIRealtimeSession (WebRTC), CallKit integration, Live Activity.
 
 ## First build (once Xcode is installed)
 
