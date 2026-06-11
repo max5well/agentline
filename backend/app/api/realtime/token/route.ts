@@ -2,9 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAppSecret } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
+// Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
+// OpenAI Realtime, local rides Gemini until PersonaPlexSession exists.
+// The provider is derived from the model name; the app derives its session
+// implementation from the tier the same way, so a per-agent model override
+// must stay within the tier's provider family (enforced below).
 const MODEL_BY_TIER: Record<string, string> = {
-  fast: "gpt-realtime-mini",
+  local: "gemini-2.5-flash-native-audio-preview-12-2025",
+  fast: "gemini-2.5-flash-native-audio-preview-12-2025",
   big: "gpt-realtime",
+};
+
+// Agents store OpenAI voice ids; map each to the closest Gemini prebuilt
+// voice so one agent config works on both providers.
+const GEMINI_VOICE: Record<string, string> = {
+  marin: "Aoede", // calm, warm
+  cedar: "Zephyr", // bright, energetic
+  sage: "Achernar", // gentle, soft
+  ash: "Charon", // deep, serious
+  coral: "Puck", // upbeat, friendly
+  verse: "Fenrir", // expressive, dynamic
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,8 +43,10 @@ function buildInstructions(agent: any, memory: string): string {
   return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
 }
 
-// Mints a short-lived OpenAI Realtime client secret for one call,
-// with the agent's persona baked into the session (ADR-3).
+// Mints a short-lived client credential for one call (ADR-3): an OpenAI
+// Realtime client secret with the persona baked in server-side, or a Gemini
+// ephemeral token plus the session config the app sends in its setup
+// message. Either way the raw API key never leaves the backend.
 export async function POST(req: NextRequest) {
   const denied = requireAppSecret(req);
   if (denied) return denied;
@@ -44,8 +63,13 @@ export async function POST(req: NextRequest) {
   if (error || !agent)
     return NextResponse.json({ error: "agent not found" }, { status: 404 });
 
+  const tierModel = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
+  const isGemini = tierModel.startsWith("gemini");
+  const override = typeof agent.model === "string" ? agent.model : "";
   const model =
-    agent.model || (MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast);
+    override && override.startsWith("gemini") === isGemini
+      ? override
+      : tierModel;
 
   // Memory: inject summaries of the last calls with this agent so it can
   // pick up where the previous conversation left off.
@@ -66,6 +90,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const instructions = buildInstructions(agent, memory);
+  return isGemini
+    ? mintGemini(model, instructions, agent.voice)
+    : mintOpenAI(model, instructions, agent.voice);
+}
+
+async function mintOpenAI(model: string, instructions: string, voice: string) {
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -77,10 +108,10 @@ export async function POST(req: NextRequest) {
       session: {
         type: "realtime",
         model,
-        instructions: buildInstructions(agent, memory),
+        instructions,
         audio: {
           input: { transcription: { model: "whisper-1" } },
-          output: { voice: agent.voice },
+          output: { voice },
         },
       },
     }),
@@ -101,5 +132,54 @@ export async function POST(req: NextRequest) {
     expiresAt: secret.expires_at,
     model,
     provider: "openai-realtime",
+  });
+}
+
+async function mintGemini(model: string, instructions: string, voice: string) {
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("GEMINI_API_KEY not set");
+    return NextResponse.json(
+      { error: "Gemini is not configured on the backend" },
+      { status: 502 },
+    );
+  }
+
+  const expiresAt = Date.now() + 600_000;
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens:create",
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": process.env.GEMINI_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        uses: 1,
+        expireTime: new Date(expiresAt).toISOString(),
+        // Window in which the app must open the websocket.
+        newSessionExpireTime: new Date(Date.now() + 120_000).toISOString(),
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.error("auth_tokens:create failed", res.status, body);
+    return NextResponse.json(
+      { error: "token minting failed" },
+      { status: 502 },
+    );
+  }
+
+  const token = await res.json();
+  return NextResponse.json({
+    clientSecret: token.name,
+    expiresAt: Math.floor(expiresAt / 1000),
+    model,
+    provider: "gemini-live",
+    // Gemini sessions are configured by the client's setup message, so the
+    // app needs these; OpenAI bakes them into the secret server-side.
+    instructions,
+    voice: GEMINI_VOICE[voice] ?? "Puck",
   });
 }
