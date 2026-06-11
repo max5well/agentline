@@ -103,6 +103,16 @@ struct CallView: View {
 
     private func endAndDismiss() async {
         await session.end()
+        // ADR-4: transcript is buffered live and POSTed on hangup; the
+        // backend's summary worker fills in the rest.
+        let config = BackendConfig.current
+        if config.isConfigured, !(session is MockVoiceSession) {
+            try? await BackendClient(config: config).saveCall(
+                agentId: agent.id, provider: "openai-realtime",
+                startedAt: startedAt, endedAt: .now,
+                transcript: transcript, costCents: costCents > 0 ? costCents : nil
+            )
+        }
         dismiss()
     }
 }

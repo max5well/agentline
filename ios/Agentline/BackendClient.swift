@@ -1,9 +1,21 @@
 import Foundation
 
 struct BackendConfig {
-    // Filled from Config.xcconfig / scheme env later; placeholder for now.
     var baseURL = URL(string: "http://localhost:3000")!
     var appSecret = ""
+
+    var isConfigured: Bool { !appSecret.isEmpty }
+
+    // Scheme environment for dev; a real config screen can come later.
+    static var current: BackendConfig {
+        let env = ProcessInfo.processInfo.environment
+        var config = BackendConfig()
+        if let url = env["AGENTLINE_BACKEND_URL"].flatMap(URL.init(string:)) {
+            config.baseURL = url
+        }
+        config.appSecret = env["AGENTLINE_APP_SECRET"] ?? ""
+        return config
+    }
 }
 
 struct RealtimeToken: Codable {

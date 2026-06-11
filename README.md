@@ -47,7 +47,8 @@ MVP ships with the `fast`/`big` OpenAI Realtime path only; the provider interfac
 - [x] Final design screens: [agentline-design/screens](https://github.com/max5well/agentline-design)
 - [x] iOS source skeleton: theme, models, VoiceSession protocol, mock session, contacts + call views
 - [x] All UI screens against MockVoiceSession: agent editor, call history, post-call summary, settings/tools — verified in simulator
-- [ ] OpenAIRealtimeSession (WebRTC) + CallKit
+- [x] OpenAIRealtimeSession (WebRTC) + CallKit — compiles, untested until backend is live
+- [ ] End-to-end realtime call on device (blocked on backend deploy)
 - [ ] Backend deploy to Vercel (blocked on Supabase project + OpenAI key)
 - [ ] Post-call summary worker
 - [ ] Handoff fan-out (Hermes / OpenClaw / Claude via MCP)

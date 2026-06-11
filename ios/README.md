@@ -18,9 +18,14 @@ Builds and runs in the simulator on MockVoiceSession.
 - `SettingsView.swift` — connected handoff tools + default handoff toggles
 - `SampleData.swift` — fixture agents and call records (stable UUIDs)
 
+- `OpenAIRealtimeSession.swift` — WebRTC to OpenAI Realtime with ephemeral token (ADR-3), server events mapped to VoiceSessionEvents
+- `CallKitController.swift` — CXProvider/CXCallController; owns the audio session in manual-audio mode, mute + hangup from system UI
+
 All screens build and were verified in the simulator against MockVoiceSession. Screen hooks for headless screenshots: launch with `-autocall`, `-screen-editor`, `-screen-history`, `-screen-summary`, or `-screen-settings`.
 
-Not started: OpenAIRealtimeSession (WebRTC), CallKit integration, Live Activity.
+The app uses OpenAIRealtimeSession when `AGENTLINE_BACKEND_URL` + `AGENTLINE_APP_SECRET` are set in the scheme environment, MockVoiceSession otherwise. **The realtime path compiles but is untested end-to-end** — needs the backend deployed (Supabase + OpenAI keys) and a device run.
+
+Not started: Live Activity, post-call summary fetch after hangup.
 
 ## First build (once Xcode is installed)
 

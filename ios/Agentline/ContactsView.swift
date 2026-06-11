@@ -67,7 +67,7 @@ struct ContactsView: View {
                 CallSummaryView(record: record, agent: agent(for: record))
             }
             .fullScreenCover(item: $activeCall) { agent in
-                CallView(agent: agent, session: MockVoiceSession())
+                CallView(agent: agent, session: Self.makeSession())
             }
             .sheet(item: $editing) { target in
                 AgentEditorView(agent: target.agent) { saved in
@@ -127,6 +127,13 @@ struct ContactsView: View {
     private func agent(for record: CallRecord) -> Agent {
         agents.first { $0.id == record.agentId }
             ?? Agent(id: record.agentId, name: "Unknown", emoji: "👤", persona: "", voice: "marin", tier: .fast, memoryEnabled: false)
+    }
+
+    // Real provider when the backend is configured, mock otherwise.
+    static func makeSession() -> any VoiceSession {
+        let config = BackendConfig.current
+        guard config.isConfigured else { return MockVoiceSession() }
+        return OpenAIRealtimeSession(backend: BackendClient(config: config))
     }
 
     // UI-test hooks: jump straight to a screen so simctl can screenshot it.
