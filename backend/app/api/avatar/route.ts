@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   if (bytes.length > 4 * 1024 * 1024)
     return NextResponse.json({ error: "image too large" }, { status: 413 });
 
-  const url = await uploadAvatar(bytes, auth.userId);
+  // The app sends JPEG (photos) — sniff so PNGs keep working too.
+  const isPNG = bytes[0] === 0x89 && bytes[1] === 0x50;
+  const url = await uploadAvatar(bytes, auth.userId, isPNG ? "image/png" : "image/jpeg");
   if (!url)
     return NextResponse.json({ error: "upload failed" }, { status: 502 });
   return NextResponse.json({ url });

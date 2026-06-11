@@ -2,8 +2,10 @@
 export async function uploadAvatar(
   bytes: Buffer,
   userId: string,
+  contentType: "image/png" | "image/jpeg" = "image/png",
 ): Promise<string | null> {
-  const path = `${userId}/${crypto.randomUUID()}.png`;
+  const ext = contentType === "image/jpeg" ? "jpg" : "png";
+  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
   const base = process.env.SUPABASE_URL!;
   const res = await fetch(`${base}/storage/v1/object/avatars/${path}`, {
     method: "POST",
@@ -12,7 +14,7 @@ export async function uploadAvatar(
       // the apikey header, not just as a Bearer token.
       apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": "image/png",
+      "Content-Type": contentType,
       "x-upsert": "true",
     },
     body: new Uint8Array(bytes),

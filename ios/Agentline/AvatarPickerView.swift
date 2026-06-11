@@ -130,8 +130,8 @@ struct AvatarPickerView: View {
         uploading = true
         errorMessage = nil
         do {
-            guard let png = image.squareAvatarPNG(side: 512) else { throw URLError(.cannotDecodeContentData) }
-            agent.avatarUrl = try await backend.uploadAvatar(png)
+            guard let jpeg = image.squareAvatarJPEG(side: 512) else { throw URLError(.cannotDecodeContentData) }
+            agent.avatarUrl = try await backend.uploadAvatar(jpeg)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -265,16 +265,20 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 
 extension UIImage {
-    // Center-crop to square and downscale — avatars render at ≤130 pt.
-    func squareAvatarPNG(side: CGFloat) -> Data? {
+    // Center-crop to square, downscale, JPEG-compress. format.scale = 1
+    // is load-bearing: the default renderer scale is the device's 3×,
+    // which turned "512" into 1536px and megabytes of PNG.
+    func squareAvatarJPEG(side: CGFloat) -> Data? {
         let shortest = min(size.width, size.height)
         let scale = side / shortest
         let origin = CGPoint(x: (size.width - shortest) / 2, y: (size.height - shortest) / 2)
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
         let result = renderer.image { _ in
             draw(in: CGRect(x: -origin.x * scale, y: -origin.y * scale,
                             width: size.width * scale, height: size.height * scale))
         }
-        return result.pngData()
+        return result.jpegData(compressionQuality: 0.85)
     }
 }
