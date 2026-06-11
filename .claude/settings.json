@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "additionalDirectories": ["/Users/maxwell/personal/repos/agentline-design"],
+    "deny": [
+      "Read(//Users/maxwell/nox/**)",
+      "Edit(//Users/maxwell/nox/**)",
+      "Read(//Users/maxwell/Library/CloudStorage/**)",
+      "Read(//Users/maxwell/.ssh/**)",
+      "Read(//Users/maxwell/.aws/**)",
+      "Read(//Users/maxwell/.gnupg/**)",
+      "Read(//Users/maxwell/.hermes/**)",
+      "Read(//Users/maxwell/Documents/**)",
+      "Read(//Users/maxwell/Desktop/**)",
+      "Read(//Users/maxwell/personal/repos/competiq/**)",
+      "Edit(//Users/maxwell/personal/repos/competiq/**)",
+      "Read(//Users/maxwell/personal/repos/brandforge/**)",
+      "Edit(//Users/maxwell/personal/repos/brandforge/**)",
+      "Read(//Users/maxwell/personal/repos/geo-open-source/**)",
+      "Edit(//Users/maxwell/personal/repos/geo-open-source/**)",
+      "Read(//Users/maxwell/personal/repos/saas-boilerplate/**)",
+      "Edit(//Users/maxwell/personal/repos/saas-boilerplate/**)",
+      "Read(//Users/maxwell/personal/repos/md-extension/**)",
+      "Edit(//Users/maxwell/personal/repos/md-extension/**)",
+      "Bash(sudo *)"
+    ]
+  }
+}
