@@ -4,6 +4,7 @@ import SwiftUI
 // edits a copy and hands the result back on Save.
 struct AgentEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusedField: Bool
     @State private var draft: Agent
     private let isNew: Bool
     private let onSave: (Agent) -> Void
@@ -25,6 +26,7 @@ struct AgentEditorView: View {
                 avatarField
                 formLabel("Name")
                 TextField("Agent name", text: $draft.name)
+                    .focused($focusedField)
                     .textFieldStyle(.plain)
                     .font(.system(size: 20))
                     .foregroundStyle(Theme.text)
@@ -33,6 +35,7 @@ struct AgentEditorView: View {
                     .fieldChrome()
                 formLabel("Persona")
                 TextField("Who is this agent? Role, background, scenario.", text: $draft.persona, axis: .vertical)
+                    .focused($focusedField)
                     .textFieldStyle(.plain)
                     .font(.subheadline)
                     .lineSpacing(3)
@@ -64,6 +67,17 @@ struct AgentEditorView: View {
                     .padding(.top, 10)
             }
             .padding(20)
+            .padding(.bottom, 40)
+        }
+        // A focused field otherwise reserves keyboard space and the form
+        // looks cut off — notorious in the simulator with the hardware
+        // keyboard, where no keyboard is even visible.
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = false }
+            }
         }
         .background(Theme.bg)
         .preferredColorScheme(.dark)

@@ -16,6 +16,25 @@ targets:
     sources: [Agentline]
     dependencies:
       - package: WebRTC
+  AgentlineUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [AgentlineUITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Agentline
+schemes:
+  Agentline:
+    build:
+      targets:
+        Agentline: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [AgentlineUITests]
     info:
       path: Agentline/Info.plist
       properties:
