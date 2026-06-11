@@ -100,8 +100,11 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     // MARK: - WebSocket
 
     private func connect(token: RealtimeToken) throws {
+        // Ephemeral tokens are only accepted by the Constrained variant of
+        // the method — plain BidiGenerateContent rejects them as
+        // "unregistered callers".
         var components = URLComponents(
-            string: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
+            string: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained"
         )!
         components.queryItems = [URLQueryItem(name: "access_token", value: token.clientSecret)]
         guard let url = components.url else { throw URLError(.badURL) }

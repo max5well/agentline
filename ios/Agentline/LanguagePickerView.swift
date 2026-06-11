@@ -23,7 +23,7 @@ struct LanguagePickerView: View {
             } header: {
                 Text("All languages")
             } footer: {
-                Text("The agent always speaks and understands this language during calls. You can ask it to switch mid-call.")
+                Text("The agent always answers in this language — but you can speak to it in any language you like. Great for practicing: talk in your target language, get answers you understand (or the other way around).")
             }
         }
         .listStyle(.insetGrouped)

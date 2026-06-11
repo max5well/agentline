@@ -36,10 +36,13 @@ function buildInstructions(agent: any, memory: string): string {
     .split(",")
     .map((l: string) => l.trim())
     .filter(Boolean);
+  // Answer language is fixed; input language is free — Max may speak any
+  // language he likes (e.g. to practice one) and still get answers in the
+  // agent's language(s).
   const languageRule =
     languages.length > 1
-      ? `Speak ${languages[0]} by default. You may switch between ${languages.join(", ")} if Max does, but no other languages`
-      : `Always speak ${languages[0] ?? "English"}, unless your persona explicitly requires another language`;
+      ? `Always answer in ${languages[0]} by default; you may switch your answers between ${languages.join(", ")} if Max explicitly asks or clearly switches, but answer in no other languages. Max may speak to you in any language — always understand him`
+      : `Always answer in ${languages[0] ?? "English"}, no matter which language Max speaks to you in — he may use any language and you must understand him, but your replies stay in ${languages[0] ?? "English"} unless your persona explicitly requires another language`;
   return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
 }
 
