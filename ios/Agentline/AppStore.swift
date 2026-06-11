@@ -14,14 +14,14 @@ final class AppStore {
         return config.isConfigured ? BackendClient(config: config) : nil
     }
 
-    // Real provider when the backend is configured, mock otherwise. The
-    // tier picks the provider, mirroring MODEL_BY_TIER on the backend:
-    // big → OpenAI Realtime, fast/local → Gemini Live (until PersonaPlex).
+    // Real provider when the backend is configured, mock otherwise.
+    // While GEMINI_API_KEY is unset on the backend, every tier falls back
+    // to OpenAI there — mirror that here or fast-tier calls die on the
+    // provider mismatch. Restore tier-based routing (big → OpenAI,
+    // fast/local → GeminiLiveSession) once the key is configured.
     static func makeSession(for agent: Agent) -> any VoiceSession {
         guard let backend = backendIfConfigured() else { return MockVoiceSession() }
-        return agent.tier == .big
-            ? OpenAIRealtimeSession(backend: backend)
-            : GeminiLiveSession(backend: backend)
+        return OpenAIRealtimeSession(backend: backend)
     }
 
     func load() async {
