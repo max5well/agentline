@@ -21,9 +21,22 @@ targets:
     #   path: Agentline/Agentline.entitlements
     #   properties:
     #     com.apple.developer.applesignin: [Default]
+    info:
+      path: Agentline/Info.plist
+      properties:
+        CFBundleDisplayName: agentline
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio, voip]
+        NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
+        # Google SSO returns the Supabase session via this scheme (ADR-6).
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [agentline]
     settings:
       base:
         DEVELOPMENT_TEAM: BF275FGFBQ
+        SWIFT_VERSION: "5.10"
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
     dependencies:
       - package: WebRTC
   AgentlineUITests:
@@ -45,18 +58,3 @@ schemes:
     test:
       config: Debug
       targets: [AgentlineUITests]
-    info:
-      path: Agentline/Info.plist
-      properties:
-        CFBundleDisplayName: agentline
-        UILaunchScreen: {}
-        UIBackgroundModes: [audio, voip]
-        NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
-        # Google SSO returns the Supabase session via this scheme (ADR-6).
-        CFBundleURLTypes:
-          - CFBundleURLSchemes: [agentline]
-    settings:
-      base:
-        SWIFT_VERSION: "5.10"
-        TARGETED_DEVICE_FAMILY: "1"
-        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
