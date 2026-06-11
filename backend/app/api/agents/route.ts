@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
     updated_at: new Date().toISOString(),
   };
   if (body.id) row.id = body.id;
+  // Migration 0003 columns — only written when the app sends them, so the
+  // route keeps working against a database that hasn't run 0003 yet.
+  if (body.voice_style !== undefined) row.voice_style = body.voice_style;
+  if (body.model !== undefined) row.model = body.model;
 
   const { data, error } = await supabase()
     .from("agents")

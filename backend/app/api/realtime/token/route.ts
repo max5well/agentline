@@ -7,6 +7,16 @@ const MODEL_BY_TIER: Record<string, string> = {
   big: "gpt-realtime",
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildInstructions(agent: any, memory: string): string {
+  const style = agent.voice_style
+    ? `\n\nVoice and delivery: ${agent.voice_style}`
+    : "";
+  // Without a language anchor the model sometimes guesses the
+  // language from the first noisy audio frames.
+  return `${agent.persona}${style}\n\nAlways speak ${agent.language ?? "English"}, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
+}
+
 // Mints a short-lived OpenAI Realtime client secret for one call,
 // with the agent's persona baked into the session (ADR-3).
 export async function POST(req: NextRequest) {
@@ -25,7 +35,8 @@ export async function POST(req: NextRequest) {
   if (error || !agent)
     return NextResponse.json({ error: "agent not found" }, { status: 404 });
 
-  const model = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
+  const model =
+    agent.model || (MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast);
 
   // Memory: inject summaries of the last calls with this agent so it can
   // pick up where the previous conversation left off.
@@ -57,9 +68,7 @@ export async function POST(req: NextRequest) {
       session: {
         type: "realtime",
         model,
-        // Without a language anchor the model sometimes guesses the
-        // language from the first noisy audio frames.
-        instructions: `${agent.persona}\n\nAlways speak ${agent.language ?? "English"}, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`,
+        instructions: buildInstructions(agent, memory),
         audio: {
           input: { transcription: { model: "whisper-1" } },
           output: { voice: agent.voice },
