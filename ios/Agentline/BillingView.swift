@@ -46,6 +46,8 @@ struct BillingView: View {
                     Text("Coming soon")
                         .foregroundStyle(.secondary)
                 }
+            } footer: {
+                Text("Beyond your included minutes, calls continue pay-as-you-go from a prepaid credit: €0.10/min on fast models, €0.40/min on big-brain models. Local calls are always free.")
             }
 
             Section {
