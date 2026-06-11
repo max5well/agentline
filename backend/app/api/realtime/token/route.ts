@@ -91,6 +91,12 @@ export async function POST(req: NextRequest) {
   }
 
   const instructions = buildInstructions(agent, memory);
+  // Until GEMINI_API_KEY is configured, Gemini tiers fall back to the
+  // OpenAI mini flow so calls keep working (the pre-Gemini behavior).
+  if (isGemini && !process.env.GEMINI_API_KEY) {
+    console.warn("GEMINI_API_KEY not set, falling back to gpt-realtime-mini");
+    return mintOpenAI("gpt-realtime-mini", instructions, agent.voice);
+  }
   return isGemini
     ? mintGemini(model, instructions, agent.voice)
     : mintOpenAI(model, instructions, agent.voice);
