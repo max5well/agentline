@@ -38,7 +38,9 @@ export async function POST(req: NextRequest) {
       session: {
         type: "realtime",
         model,
-        instructions: agent.persona,
+        // Without a language anchor the model sometimes guesses the
+        // language from the first noisy audio frames.
+        instructions: `${agent.persona}\n\nAlways speak English, unless your persona explicitly requires another language.`,
         audio: {
           input: { transcription: { model: "whisper-1" } },
           output: { voice: agent.voice },
