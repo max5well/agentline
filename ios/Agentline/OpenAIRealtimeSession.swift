@@ -183,7 +183,14 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
 }
 
 extension OpenAIRealtimeSession: RTCDataChannelDelegate {
-    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {}
+    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        // The model never speaks unprompted; request the greeting turn
+        // (instructions for it are in the session config) once the
+        // channel opens.
+        guard dataChannel.readyState == .open,
+              let payload = try? JSONSerialization.data(withJSONObject: ["type": "response.create"]) else { return }
+        dataChannel.sendData(RTCDataBuffer(data: payload, isBinary: false))
+    }
 
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         handleServerEvent(buffer.data)
