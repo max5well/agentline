@@ -41,8 +41,9 @@ struct ContactsView: View {
                     sectionLabel("Agents")
                     VStack(spacing: 0) {
                         ForEach(agents) { agent in
-                            Button { activeCall = agent } label: {
-                                ContactRow(agent: agent) { editing = EditorTarget(agent: agent) }
+                            // Row opens the editor; the phone button calls.
+                            Button { editing = EditorTarget(agent: agent) } label: {
+                                ContactRow(agent: agent) { activeCall = agent }
                             }
                             if agent.id != agents.last?.id {
                                 Divider().overlay(Color.white.opacity(0.075))
@@ -66,7 +67,10 @@ struct ContactsView: View {
             .navigationDestination(for: CallRecord.self) { record in
                 CallSummaryView(record: record, agent: agent(for: record))
             }
-            .fullScreenCover(item: $activeCall) { agent in
+            .fullScreenCover(item: $activeCall, onDismiss: {
+                // Pick up the record (and summary) of the call that just ended.
+                Task { await loadFromBackend() }
+            }) { agent in
                 CallView(agent: agent, session: Self.makeSession())
             }
             .sheet(item: $editing) { target in
@@ -76,8 +80,12 @@ struct ContactsView: View {
                     } else {
                         agents.append(saved)
                     }
+                    if let backend = Self.backendIfConfigured() {
+                        Task { try? await backend.saveAgent(saved) }
+                    }
                 }
             }
+            .task { await loadFromBackend() }
             .onAppear(perform: handleLaunchArguments)
         }
         .preferredColorScheme(.dark)
@@ -131,9 +139,24 @@ struct ContactsView: View {
 
     // Real provider when the backend is configured, mock otherwise.
     static func makeSession() -> any VoiceSession {
+        guard let backend = backendIfConfigured() else { return MockVoiceSession() }
+        return OpenAIRealtimeSession(backend: backend)
+    }
+
+    static func backendIfConfigured() -> BackendClient? {
         let config = BackendConfig.current
-        guard config.isConfigured else { return MockVoiceSession() }
-        return OpenAIRealtimeSession(backend: BackendClient(config: config))
+        return config.isConfigured ? BackendClient(config: config) : nil
+    }
+
+    // Live data when the backend is configured; sample fixtures otherwise.
+    private func loadFromBackend() async {
+        guard let backend = Self.backendIfConfigured() else { return }
+        if let fetched = try? await backend.agents(), !fetched.isEmpty {
+            agents = fetched
+        }
+        if let fetched = try? await backend.calls() {
+            records = fetched
+        }
     }
 
     // UI-test hooks: jump straight to a screen so simctl can screenshot it.
@@ -155,7 +178,7 @@ struct ContactsView: View {
 
 struct ContactRow: View {
     let agent: Agent
-    var onInfo: () -> Void = {}
+    var onCall: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -195,12 +218,15 @@ struct ContactRow: View {
                         .stroke(Theme.accent.opacity(0.38), lineWidth: 1)
                 )
 
-            Button(action: onInfo) {
-                Image(systemName: "info")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .frame(width: 26, height: 26)
-                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
+            Button(action: onCall) {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: 0x17120C))
+                    .frame(width: 40, height: 40)
+                    .background(
+                        LinearGradient(colors: [Theme.accentBright, Theme.accent], startPoint: .top, endPoint: .bottom),
+                        in: Circle()
+                    )
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)

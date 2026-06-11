@@ -28,15 +28,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Upsert: the app creates agents with its own UUID and edits them
+  // through the same endpoint.
+  const row: Record<string, unknown> = {
+    name,
+    persona,
+    emoji: body.emoji ?? "🤖",
+    voice: body.voice ?? "marin",
+    tier: body.tier ?? "fast",
+    memory_enabled: body.memory_enabled ?? true,
+    updated_at: new Date().toISOString(),
+  };
+  if (body.id) row.id = body.id;
+
   const { data, error } = await supabase()
     .from("agents")
-    .insert({
-      name,
-      persona,
-      emoji: body.emoji ?? "🤖",
-      voice: body.voice ?? "marin",
-      tier: body.tier ?? "fast",
-    })
+    .upsert(row)
     .select()
     .single();
   if (error)

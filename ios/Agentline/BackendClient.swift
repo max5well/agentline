@@ -28,13 +28,36 @@ struct RealtimeToken: Codable {
 struct BackendClient {
     var config = BackendConfig()
 
+    // Supabase emits ISO8601 with fractional seconds; plain .iso8601 can't
+    // parse those.
+    static let decoder: JSONDecoder = {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .custom { decoder in
+            let s = try decoder.singleValueContainer().decode(String.self)
+            if let date = fractional.date(from: s) ?? plain.date(from: s) { return date }
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "unparseable date: \(s)"
+            ))
+        }
+        return d
+    }()
+
+    static let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+
     private func request(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
         var req = URLRequest(url: config.baseURL.appending(path: path))
         req.httpMethod = method
         req.setValue(config.appSecret, forHTTPHeaderField: "x-app-secret")
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try JSONEncoder().encode(body)
+            req.httpBody = try Self.encoder.encode(body)
         }
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -46,13 +69,23 @@ struct BackendClient {
     func agents() async throws -> [Agent] {
         struct Wrapper: Codable { let agents: [Agent] }
         let data = try await request("/api/agents")
-        return try JSONDecoder().decode(Wrapper.self, from: data).agents
+        return try Self.decoder.decode(Wrapper.self, from: data).agents
+    }
+
+    func calls() async throws -> [CallRecord] {
+        struct Wrapper: Codable { let calls: [CallRecord] }
+        let data = try await request("/api/calls")
+        return try Self.decoder.decode(Wrapper.self, from: data).calls
+    }
+
+    func saveAgent(_ agent: Agent) async throws {
+        _ = try await request("/api/agents", method: "POST", body: agent)
     }
 
     func mintRealtimeToken(agentId: UUID) async throws -> RealtimeToken {
         struct Body: Encodable { let agentId: UUID }
         let data = try await request("/api/realtime/token", method: "POST", body: Body(agentId: agentId))
-        return try JSONDecoder().decode(RealtimeToken.self, from: data)
+        return try Self.decoder.decode(RealtimeToken.self, from: data)
     }
 
     func saveCall(agentId: UUID, provider: String, startedAt: Date, endedAt: Date, transcript: [TranscriptEntry], costCents: Int?) async throws {

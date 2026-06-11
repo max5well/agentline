@@ -16,6 +16,9 @@ enum VoiceSessionState: Equatable {
 enum VoiceSessionEvent {
     case state(VoiceSessionState)
     case transcript(TranscriptEntry)
+    /// The agent utterance currently being spoken, growing as it streams.
+    /// A `.transcript` event with the final text follows when it completes.
+    case partialTranscript(String)
     case costTick(cents: Int)
     case error(String)
 }

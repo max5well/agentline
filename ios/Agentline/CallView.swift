@@ -12,6 +12,8 @@ struct CallView: View {
     @State private var muted = false
     @State private var captionsOn = true
     @State private var errorMessage: String?
+    @State private var partialCaption: String?
+    @State private var showTranscript = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,15 +29,7 @@ struct CallView: View {
                     .padding(.horizontal, 36)
                     .padding(.bottom, 18)
             }
-            if captionsOn, let last = transcript.last, state == .agentSpeaking {
-                Text(last.text)
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.text.opacity(0.92))
-                    .lineLimit(2)
-                    .padding(.horizontal, 36)
-                    .padding(.bottom, 18)
-            }
+            captionArea
             controls
         }
         .padding(.vertical, 24)
@@ -49,13 +43,23 @@ struct CallView: View {
                     // On error, stay on screen so the message is readable;
                     // the user leaves via the hang-up button.
                     if s == .ended && errorMessage == nil { await endAndDismiss() }
-                case .transcript(let entry): transcript.append(entry)
+                case .transcript(let entry):
+                    transcript.append(entry)
+                    if entry.role == "agent" { partialCaption = nil }
+                case .partialTranscript(let text):
+                    partialCaption = text
                 case .costTick(let cents): costCents = cents
                 case .error(let message): errorMessage = message
                 }
             }
         }
         .task { try? await session.start(agent: agent) }
+        .sheet(isPresented: $showTranscript) {
+            LiveTranscriptPanel(agentName: agent.name, transcript: transcript, partial: partialCaption)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Color(hex: 0x111315))
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -87,6 +91,29 @@ struct CallView: View {
         }
     }
 
+    // Fixed-height so the controls don't jump when captions come and go.
+    private var captionArea: some View {
+        Group {
+            if captionsOn, let caption = partialCaption ?? lastAgentLine {
+                Text(caption)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.text.opacity(0.92))
+                    .lineLimit(3, reservesSpace: false)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, 36)
+                    .animation(nil, value: caption)
+            }
+        }
+        .frame(height: 70)
+        .padding(.bottom, 14)
+    }
+
+    private var lastAgentLine: String? {
+        guard state == .agentSpeaking else { return nil }
+        return transcript.last(where: { $0.role == "agent" })?.text
+    }
+
     private var controls: some View {
         VStack(spacing: 16) {
             HStack(spacing: 18) {
@@ -97,6 +124,9 @@ struct CallView: View {
                 ControlButton(icon: "speaker.wave.2.fill", label: "audio", active: false) {}
                 ControlButton(icon: "captions.bubble.fill", label: "captions", active: captionsOn) {
                     captionsOn.toggle()
+                }
+                ControlButton(icon: "list.bullet.rectangle.fill", label: "transcript", active: showTranscript) {
+                    showTranscript = true
                 }
             }
             Button {
@@ -152,6 +182,60 @@ struct ControlButton: View {
                     .foregroundStyle(Theme.text.opacity(0.9))
             }
         }
+    }
+}
+
+// Live transcript: scrollable during the call, follows new lines.
+struct LiveTranscriptPanel: View {
+    let agentName: String
+    let transcript: [TranscriptEntry]
+    let partial: String?
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Transcript")
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 18)
+                    if transcript.isEmpty && partial == nil {
+                        Text("Say something — the conversation shows up here as you talk.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.muted)
+                            .padding(.top, 30)
+                            .frame(maxWidth: .infinity)
+                    }
+                    ForEach(Array(transcript.enumerated()), id: \.offset) { _, entry in
+                        line(role: entry.role, text: entry.text)
+                    }
+                    if let partial {
+                        line(role: "agent", text: partial)
+                    }
+                    Color.clear.frame(height: 1).id("bottom")
+                }
+                .padding(.horizontal, 22)
+                .padding(.bottom, 20)
+            }
+            .onChange(of: transcript.count) { proxy.scrollTo("bottom") }
+            .onChange(of: partial) { proxy.scrollTo("bottom") }
+            .onAppear { proxy.scrollTo("bottom") }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func line(role: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(role == "user" ? "You" : agentName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(role == "user" ? Theme.muted : Theme.accent)
+            Text(text)
+                .font(.subheadline)
+                .lineSpacing(3)
+                .foregroundStyle(Theme.text.opacity(0.9))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

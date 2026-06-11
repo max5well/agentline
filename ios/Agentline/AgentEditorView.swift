@@ -54,6 +54,12 @@ struct AgentEditorView: View {
                 .padding(.horizontal, 16)
                 .frame(height: 58)
                 .glassCard()
+                Text("After each call, a short summary is written automatically. With memory on, the last few summaries are given to \(draft.name.isEmpty ? "the agent" : draft.name) at the start of the next call — so conversations pick up where you left off. Nothing to manage; it just works per agent.")
+                    .font(.footnote)
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.muted)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
             }
             .padding(20)
         }

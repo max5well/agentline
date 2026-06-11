@@ -20,6 +20,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private var callId: UUID?
     private var startedAt: Date?
     private var agentSpeaking = false
+    private var currentUtterance = ""
 
     init(backend: BackendClient) {
         self.backend = backend
@@ -162,7 +163,12 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
                 agentSpeaking = true
                 continuation.yield(.state(.agentSpeaking))
             }
+            if let delta = json["delta"] as? String {
+                currentUtterance += delta
+                continuation.yield(.partialTranscript(currentUtterance))
+            }
         case "response.output_audio_transcript.done":
+            currentUtterance = ""
             if let text = json["transcript"] as? String {
                 continuation.yield(.transcript(.init(role: "agent", text: text, t: elapsed)))
             }

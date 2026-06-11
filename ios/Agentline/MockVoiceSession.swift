@@ -25,8 +25,16 @@ final class MockVoiceSession: VoiceSession {
                 continuation.yield(.state(.thinking))
                 try? await Task.sleep(for: .seconds(1.5))
                 continuation.yield(.state(.agentSpeaking))
-                continuation.yield(.transcript(.init(role: "agent", text: "It wasn't really about peace, it was about insurance against France ever dominating again…", t: 5)))
-                try? await Task.sleep(for: .seconds(4))
+                // Stream the reply word by word like the realtime API does.
+                let reply = "It wasn't really about peace, it was about insurance against France ever dominating again…"
+                var spoken = ""
+                for word in reply.split(separator: " ") {
+                    spoken += (spoken.isEmpty ? "" : " ") + word
+                    continuation.yield(.partialTranscript(spoken))
+                    try? await Task.sleep(for: .seconds(0.18))
+                }
+                continuation.yield(.transcript(.init(role: "agent", text: reply, t: 5)))
+                try? await Task.sleep(for: .seconds(1.2))
                 cents += 2
                 continuation.yield(.costTick(cents: cents))
             }

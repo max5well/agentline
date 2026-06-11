@@ -27,6 +27,25 @@ export async function POST(req: NextRequest) {
 
   const model = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
 
+  // Memory: inject summaries of the last calls with this agent so it can
+  // pick up where the previous conversation left off.
+  let memory = "";
+  if (agent.memory_enabled) {
+    const { data: recent } = await supabase()
+      .from("calls")
+      .select("summary, started_at")
+      .eq("agent_id", agentId)
+      .not("summary", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(3);
+    if (recent && recent.length > 0) {
+      const bullets = recent
+        .map((c) => `- (${new Date(c.started_at).toDateString()}) ${c.summary}`)
+        .join("\n");
+      memory = `\n\nWhat you remember from your recent calls with Max, most recent first:\n${bullets}`;
+    }
+  }
+
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -40,7 +59,7 @@ export async function POST(req: NextRequest) {
         model,
         // Without a language anchor the model sometimes guesses the
         // language from the first noisy audio frames.
-        instructions: `${agent.persona}\n\nAlways speak English, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence (e.g. "Hey Max, how are you doing today?"), then let him lead.`,
+        instructions: `${agent.persona}\n\nAlways speak English, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence (e.g. "Hey Max, how are you doing today?"), then let him lead.${memory}`,
         audio: {
           input: { transcription: { model: "whisper-1" } },
           output: { voice: agent.voice },
