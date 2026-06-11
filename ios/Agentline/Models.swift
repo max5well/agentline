@@ -37,6 +37,50 @@ struct Agent: Identifiable, Codable, Hashable {
     }
 }
 
+// Model catalog (DESIGN-SPEC §3.9): the UI exposes model ids; the tier
+// stays as the derived grouping the backend routes on.
+struct ModelOption: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let blurb: String
+    let tier: Tier
+    var available: Bool = true
+}
+
+enum ModelCatalog {
+    static let all: [ModelOption] = [
+        .init(id: "personaplex-7b", name: "PersonaPlex 7B",
+              blurb: "Runs on your Mac Studio · most natural turn-taking",
+              tier: .local, available: false),
+        .init(id: "gpt-realtime-mini", name: "GPT Realtime Mini",
+              blurb: "Quick and cheap, everyday topics", tier: .fast),
+        .init(id: "gemini-2.5-flash-native-audio-preview-12-2025", name: "Gemini 2.5 Flash Live",
+              blurb: "Quick and cheap, everyday topics", tier: .fast),
+        .init(id: "gpt-realtime", name: "GPT Realtime",
+              blurb: "Deeper reasoning, still speech-to-speech", tier: .big),
+        .init(id: "claude-sonnet-pipeline", name: "Claude Sonnet (pipeline)",
+              blurb: "Deepest reasoning · +~200ms latency",
+              tier: .big, available: false),
+    ]
+
+    static func option(for agent: Agent) -> ModelOption? {
+        if let model = agent.model, let exact = all.first(where: { $0.id == model }) {
+            return exact
+        }
+        // Tier default mirrors the backend's MODEL_BY_TIER.
+        switch agent.tier {
+        case .local, .fast: return all.first { $0.id == "gpt-realtime-mini" }
+        case .big: return all.first { $0.id == "gpt-realtime" }
+        }
+    }
+}
+
+extension Agent {
+    var modelDisplayName: String {
+        ModelCatalog.option(for: self)?.name ?? model ?? tier.label
+    }
+}
+
 struct TranscriptEntry: Codable, Hashable {
     let role: String // "user" | "agent"
     let text: String

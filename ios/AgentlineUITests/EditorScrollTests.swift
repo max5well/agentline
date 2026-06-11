@@ -1,23 +1,32 @@
 import XCTest
 
 final class EditorScrollTests: XCTestCase {
-    // Regression: the agent editor must scroll all the way down to the
-    // memory section (reported broken — screen cut off at Voice).
-    func testEditorScrollsToMemoryToggle() {
+    // The redesigned editor (DESIGN-SPEC §3.5): Conversation rows reach
+    // their sub-screens, and Memory & Context shows the toggle.
+    func testEditorConversationRowsNavigate() {
         let app = XCUIApplication()
         app.launchArguments = ["-screen-editor"]
         app.launch()
 
-        let voiceLabel = app.staticTexts["VOICE"]
-        XCTAssertTrue(voiceLabel.waitForExistence(timeout: 5), "editor did not open")
-        let before = voiceLabel.frame.minY
+        XCTAssertTrue(app.staticTexts["Edit Agent"].waitForExistence(timeout: 5), "editor did not open")
+        for row in ["Language", "Voice", "Model", "Memory & Context"] {
+            XCTAssertTrue(app.staticTexts[row].exists, "missing Conversation row: \(row)")
+        }
 
-        app.swipeUp()
-        let after = voiceLabel.frame.minY
-        XCTAssertLessThan(after, before - 50, "editor content did not move on swipe")
+        app.staticTexts["Memory & Context"].tap()
+        let toggle = app.switches.firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3), "memory toggle not shown")
+    }
 
-        app.swipeUp()
-        let memoryToggle = app.switches.firstMatch
-        XCTAssertTrue(memoryToggle.waitForExistence(timeout: 3), "memory toggle never became visible")
+    func testTabsExist() {
+        let app = XCUIApplication()
+        app.launch()
+        for tab in ["Agents", "Recents", "Settings"] {
+            XCTAssertTrue(app.tabBars.buttons[tab].waitForExistence(timeout: 5), "missing tab: \(tab)")
+        }
+        app.tabBars.buttons["Recents"].tap()
+        XCTAssertTrue(app.navigationBars["Recents"].waitForExistence(timeout: 3))
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
     }
 }

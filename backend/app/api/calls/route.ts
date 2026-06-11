@@ -85,3 +85,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ calls: data });
 }
+
+// Recents supports row deletion (DESIGN-SPEC §3.2).
+export async function DELETE(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  let query = supabase().from("calls").delete().eq("id", id);
+  if (auth.userId) query = query.eq("user_id", auth.userId);
+
+  const { error } = await query;
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

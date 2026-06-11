@@ -1,174 +1,214 @@
 import SwiftUI
 
-// Settings per design screen 11: connected handoff tools + default
-// handoff toggles. Connection state is local-only until handoff lands.
+// Settings tab (DESIGN-SPEC §3.11).
 struct SettingsView: View {
-    @AppStorage("handoff.askAfterCall") private var askAfterCall = true
-    @AppStorage("handoff.includeTranscript") private var includeTranscript = false
-    @AppStorage("backend.url") private var backendURL = ""
+    @Bindable var store: AppStore
+    @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
+    @AppStorage("handoff.includeTranscript") private var shareTranscriptAfterCalls = false
+    @AppStorage("defaultLanguage") private var defaultLanguage = "English"
     @State private var auth = AuthStore.shared
-    @State private var tools = HandoffTool.all
+    @State private var toolStates: [String: Bool] = Dictionary(
+        uniqueKeysWithValues: ConnectedToolsStore.all.map { ($0.id, $0.connected) }
+    )
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                sectionLabel("Backend")
-                Text(connectionBlurb)
-                    .font(.subheadline)
-                    .lineSpacing(3)
-                    .foregroundStyle(BackendConfig.current.isConfigured && auth.session != nil ? Color(hex: 0x93D7AA) : Theme.danger)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 12)
+        NavigationStack {
+            List {
+                Section {
+                    NavigationLink {
+                        BillingView(store: store)
+                    } label: {
+                        HStack {
+                            Label("Subscription & Billing", systemImage: "creditcard")
+                            Spacer()
+                            Text(String(format: "€%.2f this month", Double(store.spentThisMonthCents) / 100))
+                                .foregroundStyle(.secondary)
+                                .font(.footnote)
+                        }
+                    }
+                    Picker(selection: $appearance) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.label).tag(mode.rawValue)
+                        }
+                    } label: {
+                        Label("Appearance", systemImage: "circle.lefthalf.filled")
+                    }
+                }
+
+                Section {
+                    ForEach(ConnectedToolsStore.all) { tool in
+                        toolRow(tool)
+                    }
+                    Toggle("Share transcript after calls", isOn: $shareTranscriptAfterCalls)
+                } header: {
+                    Text("Connected tools")
+                } footer: {
+                    Text("Connected tools appear as “Send to” options on every call summary.")
+                }
+
+                Section("Defaults") {
+                    NavigationLink {
+                        VoiceProfilesListView()
+                    } label: {
+                        HStack {
+                            Label("Voice Profiles", systemImage: "waveform")
+                            Spacer()
+                            Text("\(VoiceProfileStore.load().count)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    NavigationLink {
+                        LanguagePickerView(selection: Binding(
+                            get: { defaultLanguage }, set: { defaultLanguage = $0 ?? "English" }
+                        ))
+                    } label: {
+                        HStack {
+                            Label("Default Language", systemImage: "globe")
+                            Spacer()
+                            Text(defaultLanguage.components(separatedBy: ",").first ?? "English")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    NavigationLink {
+                        BackendSettingsView()
+                    } label: {
+                        HStack {
+                            Label("Backend", systemImage: "server.rack")
+                            Spacer()
+                            Text(BackendConfig.current.isConfigured ? "● Connected" : "Not configured")
+                                .font(.footnote)
+                                .foregroundStyle(BackendConfig.current.isConfigured ? .green : .red)
+                        }
+                    }
+                }
+
+                if let session = auth.session {
+                    Section("Account") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.email ?? "Signed in")
+                                    .font(.body.weight(.medium))
+                                Text("Agents and call history belong to this account.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Sign out") { auth.signOut() }
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                Section {
+                } footer: {
+                    Text("agentline \(appVersion)\(BackendConfig.current.isConfigured ? "" : " · demo mode")")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Settings")
+        }
+    }
+
+    private func toolRow(_ tool: ConnectedTool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: tool.icon)
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tool.name)
+                Text(tool.blurb)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                let newValue = !(toolStates[tool.id] ?? false)
+                toolStates[tool.id] = newValue
+                tool.connected = newValue
+            } label: {
+                Text((toolStates[tool.id] ?? false) ? "Connected" : "Connect")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle((toolStates[tool.id] ?? false) ? .green : Color.accentColor)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint((toolStates[tool.id] ?? false) ? .green : .accentColor)
+        }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+}
+
+// Voice profiles management from Settings (count row in Defaults).
+struct VoiceProfilesListView: View {
+    @State private var profiles = VoiceProfileStore.load()
+    @State private var showNew = false
+
+    var body: some View {
+        List {
+            ForEach(profiles) { profile in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.name)
+                    Text(profile.prompt)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .onDelete { offsets in
+                profiles.remove(atOffsets: offsets)
+                VoiceProfileStore.save(profiles)
+            }
+            Button("New Voice Profile…") { showNew = true }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Voice Profiles")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showNew) {
+            NewVoiceProfileView { profile in
+                profiles.append(profile)
+                VoiceProfileStore.save(profiles)
+            }
+        }
+        .overlay {
+            if profiles.isEmpty {
+                ContentUnavailableView(
+                    "No voice profiles",
+                    systemImage: "waveform",
+                    description: Text("Profiles are prompts that shape how any agent sounds.")
+                )
+            }
+        }
+    }
+}
+
+// Backend URL/secret form, moved out of the main settings list (§3.11).
+struct BackendSettingsView: View {
+    @AppStorage("backend.url") private var backendURL = ""
+    @AppStorage("backend.secret") private var backendSecret = ""
+
+    var body: some View {
+        Form {
+            Section {
                 TextField("Backend URL", text: $backendURL, prompt: Text("https://agentline-chi.vercel.app"))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                    .padding(.horizontal, 16)
-                    .frame(height: 54)
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.text)
-                    .glassCard()
-
-                if let session = auth.session {
-                    sectionLabel("Account")
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(session.email ?? "Signed in")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(Theme.text)
-                            Text("Agents and call history belong to this account.")
-                                .font(.footnote)
-                                .foregroundStyle(Theme.muted)
-                        }
-                        Spacer()
-                        Button("Sign out") { auth.signOut() }
-                            .font(.footnote.weight(.bold))
-                            .foregroundStyle(Theme.danger)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 64)
-                    .glassCard()
-                }
-
-                sectionLabel("Connected tools")
-                Text("Connect destinations that can receive call summaries and transcripts after each call.")
-                    .font(.subheadline)
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.muted)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 18)
-
-                VStack(spacing: 0) {
-                    ForEach($tools) { $tool in
-                        toolRow($tool)
-                        if tool.id != tools.last?.id {
-                            Divider().overlay(Color.white.opacity(0.075))
-                        }
-                    }
-                }
-                .glassCard()
-
-                sectionLabel("Default handoff")
-                toggleRow("Ask after every call", isOn: $askAfterCall)
-                toggleRow("Include full transcript", isOn: $includeTranscript)
-                    .padding(.top, 10)
-            }
-            .padding(20)
-        }
-        .background(Theme.bg)
-        .preferredColorScheme(.dark)
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-    }
-
-    private var connectionBlurb: String {
-        if !BackendConfig.current.isConfigured {
-            return "Not configured — calls run in demo mode with a scripted agent and no audio."
-        }
-        return auth.session != nil
-            ? "Connected — calls use the real voice provider."
-            : "Signed out — sign in to load your agents and place calls."
-    }
-
-    private func toolRow(_ tool: Binding<HandoffTool>) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: tool.wrappedValue.icon)
-                .font(.system(size: 21))
-                .foregroundStyle(Color(hex: 0xE9C887))
-                .frame(width: 46, height: 46)
-                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .stroke(Theme.accent.opacity(0.38), lineWidth: 1)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tool.wrappedValue.name)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Theme.text)
-                Text(tool.wrappedValue.blurb)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.muted)
-            }
-
-            Spacer()
-
-            Button {
-                tool.wrappedValue.connected.toggle()
-            } label: {
-                Text(tool.wrappedValue.connected ? "Connected" : "Connect")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(tool.wrappedValue.connected ? Color(hex: 0x93D7AA) : Color(hex: 0xEBC98B))
-                    .frame(width: 94, height: 36)
-                    .background(
-                        (tool.wrappedValue.connected ? Theme.green : Theme.accent).opacity(0.16),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke((tool.wrappedValue.connected ? Theme.green : Theme.accent).opacity(0.38), lineWidth: 1)
-                    )
+                SecureField("App secret", text: $backendSecret)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } footer: {
+                Text(BackendConfig.current.isConfigured
+                     ? "Connected — calls use the real voice provider."
+                     : "Not configured — calls run in demo mode with a scripted agent and no audio.")
+                    .foregroundStyle(BackendConfig.current.isConfigured ? .green : .red)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minHeight: 82)
+        .navigationTitle("Backend")
+        .navigationBarTitleDisplayMode(.inline)
     }
-
-    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            Text(title)
-                .font(.system(size: 18))
-                .foregroundStyle(Theme.text)
-        }
-        .tint(Theme.accent)
-        .padding(.horizontal, 16)
-        .frame(height: 58)
-        .glassCard()
-    }
-
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 12, weight: .semibold))
-            .kerning(1.5)
-            .foregroundStyle(Theme.text.opacity(0.5))
-            .padding(.horizontal, 8)
-            .padding(.top, 22)
-            .padding(.bottom, 10)
-    }
-}
-
-struct HandoffTool: Identifiable {
-    let id: String
-    let name: String
-    let blurb: String
-    let icon: String
-    var connected: Bool
-
-    static let all: [HandoffTool] = [
-        .init(id: "obsidian", name: "Obsidian", blurb: "Save summaries into a vault", icon: "square.grid.2x2", connected: true),
-        .init(id: "drive", name: "Google Drive", blurb: "Export transcripts as Docs or Markdown", icon: "externaldrive", connected: false),
-        .init(id: "mcp", name: "MCP", blurb: "Send call data to custom tools", icon: "command", connected: false),
-        .init(id: "hermes", name: "Hermes", blurb: "Share summaries to your assistant", icon: "sparkle", connected: true),
-    ]
 }

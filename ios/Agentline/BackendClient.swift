@@ -178,6 +178,10 @@ struct BackendClient {
         _ = try await request("/api/agents", method: "POST", body: agent)
     }
 
+    func deleteCall(id: UUID) async throws {
+        _ = try await request("/api/calls?id=\(id.uuidString)", method: "DELETE")
+    }
+
     func mintRealtimeToken(agentId: UUID) async throws -> RealtimeToken {
         struct Body: Encodable { let agentId: UUID }
         let data = try await request("/api/realtime/token", method: "POST", body: Body(agentId: agentId))

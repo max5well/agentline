@@ -7,6 +7,7 @@ import SwiftUI
 // the system web-auth session against Supabase's authorize endpoint.
 struct AuthView: View {
     @Environment(\.webAuthenticationSession) private var webSession
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var email = ""
     @State private var password = ""
@@ -25,7 +26,7 @@ struct AuthView: View {
                     .padding(.bottom, 6)
                 Text(creatingAccount ? "Create your account" : "Welcome back")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(.secondary)
                     .padding(.bottom, 34)
 
                 emailForm
@@ -34,7 +35,7 @@ struct AuthView: View {
                     Text(errorMessage)
                         .font(.footnote)
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(Theme.danger)
+                        .foregroundStyle(.red)
                         .padding(.top, 14)
                         .padding(.horizontal, 8)
                 }
@@ -48,7 +49,7 @@ struct AuthView: View {
                 } label: {
                     Text(creatingAccount ? "Already have an account? Sign in" : "New here? Create an account")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(Color.accentColor)
                 }
                 .padding(.top, 16)
 
@@ -61,14 +62,13 @@ struct AuthView: View {
             .padding(.bottom, 40)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(Theme.bg)
-        .preferredColorScheme(.dark)
+        .background(Color(.systemGroupedBackground))
         .disabled(busy)
-        .overlay { if busy { ProgressView().tint(Theme.accent) } }
+        .overlay { if busy { ProgressView() } }
     }
 
     private var wordmark: some View {
-        (Text("agent").foregroundStyle(Theme.text) + Text("line").foregroundStyle(Theme.accent))
+        (Text("agent").foregroundStyle(.primary) + Text("line").foregroundStyle(Color.accentColor))
             .font(.system(size: 40, weight: .bold))
             .kerning(-1.4)
     }
@@ -82,15 +82,15 @@ struct AuthView: View {
                 .textContentType(.emailAddress)
                 .padding(.horizontal, 16)
                 .frame(height: 54)
-            Divider().overlay(Color.white.opacity(0.075))
+            Divider()
             SecureField("Password", text: $password)
                 .textContentType(creatingAccount ? .newPassword : .password)
                 .padding(.horizontal, 16)
                 .frame(height: 54)
         }
         .font(.system(size: 16))
-        .foregroundStyle(Theme.text)
-        .glassCard()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var primaryButton: some View {
@@ -98,24 +98,19 @@ struct AuthView: View {
             Task { await submitEmail() }
         } label: {
             Text(creatingAccount ? "Create account" : "Sign in")
-                .font(.body.weight(.bold))
-                .foregroundStyle(Color(hex: 0x1A1309))
+                .font(.body.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(
-                    LinearGradient(colors: [Color(hex: 0xE6BF77), Color(hex: 0xAC8348)], startPoint: .top, endPoint: .bottom),
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                )
+                .frame(height: 38)
         }
+        .buttonStyle(.borderedProminent)
         .disabled(email.isEmpty || password.isEmpty)
-        .opacity(email.isEmpty || password.isEmpty ? 0.55 : 1)
     }
 
     private var divider: some View {
         HStack(spacing: 14) {
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-            Text("or").font(.caption).foregroundStyle(Theme.dim)
-            Rectangle().fill(Theme.hairline).frame(height: 1)
+            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            Text("or").font(.caption).foregroundStyle(.secondary)
+            Rectangle().fill(Color(.separator)).frame(height: 0.5)
         }
     }
 
@@ -128,9 +123,9 @@ struct AuthView: View {
             } onCompletion: { result in
                 Task { await handleApple(result) }
             }
-            .signInWithAppleButtonStyle(.white)
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button {
                 Task { await signInWithGoogle() }
@@ -141,11 +136,11 @@ struct AuthView: View {
                     Text("Continue with Google")
                         .font(.body.weight(.semibold))
                 }
-                .foregroundStyle(Theme.text)
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.hairline, lineWidth: 1))
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color(.separator), lineWidth: 0.5))
             }
         }
     }
