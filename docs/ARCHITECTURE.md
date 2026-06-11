@@ -38,6 +38,18 @@ Gemini Live works the same way with ephemeral tokens (`v1alpha auth_tokens:creat
 
 The Realtime API emits input/output transcription events during the session. The app buffers them and POSTs the full transcript on hangup. A backend worker then writes a summary + extracted intents (cheap model, Claude Haiku) into the call record. Handoff fan-out (Hermes Telegram, OpenClaw, Claude via MCP) hangs off the summary write — out of MVP scope.
 
-## ADR-5: Single-user auth
+## ADR-5: Single-user auth — superseded by ADR-6
 
 Personal app. Backend endpoints check a static `x-app-secret` header against an env var. No user accounts, no Supabase Auth, until there's a second user.
+
+## ADR-6: Multi-user accounts via Supabase Auth (supersedes ADR-5)
+
+The app is going multi-user, so Supabase Auth (GoTrue) becomes the identity provider with three sign-in methods:
+
+- **Email + password** — signup creates the user pre-confirmed via the admin API (no email infra to run).
+- **Sign in with Apple** — native `AuthenticationServices` flow; the app exchanges Apple's `id_token` (+ nonce) for a Supabase session.
+- **Google** — web OAuth via `ASWebAuthenticationSession` against Supabase's `/auth/v1/authorize?provider=google`, redirecting back to the `agentline://` scheme with tokens in the fragment. No Google SDK dependency.
+
+All email/Apple auth calls are proxied through backend `/api/auth/*` routes, so API keys stay server-side (consistent with ADR-3) and the app only talks to our endpoints. The app stores the access/refresh token pair in the Keychain and refreshes on 401.
+
+Data routes replace `x-app-secret` with `Authorization: Bearer <jwt>`, verified via `auth.getUser`, and every `agents`/`calls` row is scoped by `user_id`. The backend keeps the service key and filters explicitly; RLS policies on `user_id` exist as defense in depth. Signup is open to anyone who finds the backend URL — acceptable for now, no rate limiting yet.
