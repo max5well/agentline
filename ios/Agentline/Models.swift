@@ -22,6 +22,8 @@ struct Agent: Identifiable, Codable, Hashable {
     var model: String? = nil
     /// Distilled rolling memory, written by the backend after each call.
     var memoryFile: String? = nil
+    /// Photo or generated avatar in the avatars bucket; nil = emoji/monogram.
+    var avatarUrl: String? = nil
     var memoryEnabled: Bool
 
     /// Comma-separated list in `language`; first entry is the default.
@@ -36,6 +38,7 @@ struct Agent: Identifiable, Codable, Hashable {
         case id, name, emoji, persona, voice, tier, language, model
         case voiceStyle = "voice_style"
         case memoryFile = "memory_file"
+        case avatarUrl = "avatar_url"
         case memoryEnabled = "memory_enabled"
     }
 }

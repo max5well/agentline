@@ -4,6 +4,7 @@ import SwiftUI
 // into the call summary.
 struct RecentsView: View {
     @Bindable var store: AppStore
+    @State private var query = ""
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct RecentsView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .searchable(text: $query, prompt: "Search calls and transcripts")
             .navigationTitle("Recents")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
@@ -36,6 +38,8 @@ struct RecentsView: View {
                         systemImage: "clock",
                         description: Text("Calls show up here after you hang up.")
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableView.search(text: query)
                 }
             }
         }
@@ -48,9 +52,21 @@ struct RecentsView: View {
         }
     }
 
+    // Searches agent names, summaries, action items, and the full
+    // transcript text ("what did Maya say about…").
+    private var filtered: [CallRecord] {
+        guard !query.isEmpty else { return store.records }
+        return store.records.filter { record in
+            store.agent(for: record).name.localizedCaseInsensitiveContains(query)
+                || (record.summary?.localizedCaseInsensitiveContains(query) ?? false)
+                || (record.intents ?? []).contains { $0.localizedCaseInsensitiveContains(query) }
+                || record.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) }
+        }
+    }
+
     private var groups: [(label: String, records: [CallRecord])] {
         let calendar = Calendar.current
-        let sorted = store.records.sorted { $0.startedAt > $1.startedAt }
+        let sorted = filtered.sorted { $0.startedAt > $1.startedAt }
         var buckets: [(String, [CallRecord])] = []
         for record in sorted {
             let label: String

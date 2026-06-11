@@ -10,17 +10,26 @@ struct AgentAvatar: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(agent.avatarColor.gradient)
-            if agent.emoji.isEmpty {
-                Text(agent.monogram)
-                    .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+            if let urlString = agent.avatarUrl, let url = URL(string: urlString) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(agent.avatarColor.gradient)
+                }
             } else {
-                Text(agent.emoji)
-                    .font(.system(size: size * 0.55))
+                Circle().fill(agent.avatarColor.gradient)
+                if agent.emoji.isEmpty {
+                    Text(agent.monogram)
+                        .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                } else {
+                    Text(agent.emoji)
+                        .font(.system(size: size * 0.55))
+                }
             }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 

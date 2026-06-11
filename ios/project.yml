@@ -28,6 +28,8 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
+        NSCameraUsageDescription: agentline uses the camera to take agent avatar photos.
+        NSSupportsLiveActivities: true
         # Google SSO returns the Supabase session via this scheme (ADR-6).
         CFBundleURLTypes:
           - CFBundleURLSchemes: [agentline]
@@ -40,6 +42,26 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
     dependencies:
       - package: WebRTC
+      - target: AgentlineWidgets
+        embed: true
+  AgentlineWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - AgentlineWidgets
+      - Agentline/CallActivityAttributes.swift
+    info:
+      path: AgentlineWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: agentline
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.max5well.Agentline.Widgets
+        DEVELOPMENT_TEAM: BF275FGFBQ
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.10"
   AgentlineUITests:
     type: bundle.ui-testing
     platform: iOS

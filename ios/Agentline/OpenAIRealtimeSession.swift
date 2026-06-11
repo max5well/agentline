@@ -23,6 +23,9 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private var startedAt: Date?
     private var agentSpeaking = false
     private var currentUtterance = ""
+    private var currentAgent: Agent?
+    private var reconnectTask: Task<Void, Never>?
+    private var didAttemptReconnect = false
 
     init(backend: BackendClient) {
         self.backend = backend
@@ -35,6 +38,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     func start(agent: Agent) async throws {
         continuation.yield(.state(.connecting))
         startedAt = Date()
+        currentAgent = agent
 
         // CallKit first: it owns the audio session (manual audio mode) and
         // activates it via the provider delegate once the call is reported.
@@ -147,6 +151,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         guard !hasEnded else { return }
         hasEnded = true
         log.info("session end() called")
+        reconnectTask?.cancel()
         CallKitController.shared.onCallEnded = nil
         CallKitController.shared.onAudioActivated = nil
         CallKitController.shared.onAudioDeactivated = nil
@@ -224,12 +229,55 @@ extension OpenAIRealtimeSession: RTCPeerConnectionDelegate {
         log.info("ICE state: \(newState.rawValue)")
         switch newState {
         case .disconnected:
+            // WebRTC often recovers on its own; show the state, and if it
+            // hasn't healed shortly, rebuild the transport.
             continuation.yield(.state(.reconnecting))
+            scheduleReconnect(after: 4)
         case .failed:
-            continuation.yield(.error("Connection lost"))
-            Task { await end() }
+            scheduleReconnect(after: 0)
+        case .connected, .completed:
+            reconnectTask?.cancel()
+            reconnectTask = nil
         default:
             break
+        }
+    }
+
+    // One full reconnect attempt (fresh token, new peer connection) before
+    // giving up — survives network blips like subway tunnels.
+    private func scheduleReconnect(after seconds: Double) {
+        guard reconnectTask == nil, !hasEnded, let agent = currentAgent else {
+            if reconnectTask == nil, !hasEnded {
+                continuation.yield(.error("Connection lost"))
+                Task { await end() }
+            }
+            return
+        }
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !self.hasEnded, !Task.isCancelled else { return }
+            guard !self.didAttemptReconnect else {
+                self.continuation.yield(.error("Connection lost"))
+                await self.end()
+                return
+            }
+            self.didAttemptReconnect = true
+            log.info("attempting reconnect")
+            self.continuation.yield(.state(.reconnecting))
+            self.dataChannel?.close()
+            self.peerConnection?.close()
+            self.dataChannel = nil
+            self.peerConnection = nil
+            do {
+                let token = try await self.backend.mintRealtimeToken(agentId: agent.id)
+                try await self.connect(token: token)
+                self.continuation.yield(.state(.listening))
+                self.reconnectTask = nil
+            } catch {
+                log.error("reconnect failed: \(error, privacy: .public)")
+                self.continuation.yield(.error("Connection lost"))
+                await self.end()
+            }
         }
     }
 

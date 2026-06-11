@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
   // route keeps working against a database that hasn't run 0003 yet.
   if (body.voice_style !== undefined) row.voice_style = body.voice_style;
   if (body.memory_file !== undefined) row.memory_file = body.memory_file;
+  if (body.avatar_url !== undefined) row.avatar_url = body.avatar_url;
   if (body.model !== undefined) row.model = body.model;
 
   const { data, error } = await supabase()

@@ -200,6 +200,20 @@ struct BackendClient {
         _ = try await request("/api/agents", method: "POST", body: agent)
     }
 
+    func uploadAvatar(_ pngData: Data) async throws -> String {
+        struct Body: Encodable { let imageBase64: String }
+        struct Response: Codable { let url: String }
+        let data = try await request("/api/avatar", method: "POST", body: Body(imageBase64: pngData.base64EncodedString()))
+        return try Self.decoder.decode(Response.self, from: data).url
+    }
+
+    func generateAvatars(description: String) async throws -> [String] {
+        struct Body: Encodable { let description: String }
+        struct Response: Codable { let urls: [String] }
+        let data = try await request("/api/avatar/generate", method: "POST", body: Body(description: description))
+        return try Self.decoder.decode(Response.self, from: data).urls
+    }
+
     func mcpStatus() async throws -> MCPConnection? {
         struct Wrapper: Codable { let connection: MCPConnection? }
         let data = try await request("/api/mcp")

@@ -32,6 +32,16 @@ final class AppStore {
         if let fetched = try? await backend.calls() {
             records = fetched
         }
+        cacheAgentsForSiri()
+    }
+
+    // Siri's AgentEntityQuery resolves names from this cache, so "Call
+    // Maya" works without the app running.
+    private func cacheAgentsForSiri() {
+        let cached = agents.map { AgentEntityQuery.CachedAgent(id: $0.id, name: $0.name) }
+        if let data = try? JSONEncoder().encode(cached) {
+            UserDefaults.standard.set(data, forKey: "cachedAgents")
+        }
     }
 
     func save(_ agent: Agent) {
@@ -43,6 +53,7 @@ final class AppStore {
         if let backend = Self.backendIfConfigured() {
             Task { try? await backend.saveAgent(agent) }
         }
+        cacheAgentsForSiri()
     }
 
     func agent(for record: CallRecord) -> Agent {

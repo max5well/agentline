@@ -6,6 +6,7 @@ struct AgentsListView: View {
     @Bindable var store: AppStore
     @Binding var activeCall: Agent?
     @Binding var editing: AgentEditTarget?
+    @Binding var showTemplates: Bool
     @State private var query = ""
 
     var body: some View {
@@ -25,7 +26,14 @@ struct AgentsListView: View {
             .navigationTitle("Agents")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { editing = AgentEditTarget(agent: nil) } label: {
+                    Menu {
+                        Button { showTemplates = true } label: {
+                            Label("Choose Template…", systemImage: "person.2")
+                        }
+                        Button { editing = AgentEditTarget(agent: nil) } label: {
+                            Label("New Agent", systemImage: "square.and.pencil")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("New Agent")
@@ -33,11 +41,18 @@ struct AgentsListView: View {
             }
             .overlay {
                 if filtered.isEmpty {
-                    ContentUnavailableView(
-                        query.isEmpty ? "No agents yet" : "No results",
-                        systemImage: "person.2",
-                        description: Text(query.isEmpty ? "Tap + to create your first agent." : "No agents match “\(query)”.")
-                    )
+                    if query.isEmpty {
+                        ContentUnavailableView {
+                            Label("No agents yet", systemImage: "person.2")
+                        } description: {
+                            Text("Start from a template or build your own.")
+                        } actions: {
+                            Button("Choose Template") { showTemplates = true }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    } else {
+                        ContentUnavailableView.search(text: query)
+                    }
                 }
             }
         }

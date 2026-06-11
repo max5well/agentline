@@ -1,3 +1,4 @@
+import ActivityKit
 import SwiftUI
 
 struct CallView: View {
@@ -13,6 +14,7 @@ struct CallView: View {
     @State private var errorMessage: String?
     @State private var partialCaption: String?
     @State private var showTranscript = false
+    @State private var activity: Activity<CallActivityAttributes>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +42,7 @@ struct CallView: View {
                 switch event {
                 case .state(let s):
                     state = s
+                    updateActivity()
                     // On error, stay on screen so the message is readable;
                     // the user leaves via the hang-up button.
                     if s == .ended && errorMessage == nil { await endAndDismiss() }
@@ -54,6 +57,7 @@ struct CallView: View {
             }
         }
         .task { try? await session.start(agent: agent) }
+        .onAppear(perform: startActivity)
         .sheet(isPresented: $showTranscript) {
             LiveTranscriptPanel(agentName: agent.name, transcript: transcript, partial: partialCaption)
                 .presentationDetents([.medium, .large])
@@ -125,7 +129,34 @@ struct CallView: View {
         .padding(.bottom, 10)
     }
 
+    // Lock-screen card + Dynamic Island while the call runs (#29).
+    private func startActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attributes = CallActivityAttributes(agentName: agent.name, agentEmoji: agent.emoji)
+        let content = ActivityContent(
+            state: CallActivityAttributes.ContentState(stateLabel: stateLabel, startedAt: startedAt),
+            staleDate: nil
+        )
+        activity = try? Activity.request(attributes: attributes, content: content)
+    }
+
+    private func updateActivity() {
+        guard let activity else { return }
+        let content = ActivityContent(
+            state: CallActivityAttributes.ContentState(stateLabel: stateLabel, startedAt: startedAt),
+            staleDate: nil
+        )
+        Task { await activity.update(content) }
+    }
+
     private func endAndDismiss() async {
+        if let activity {
+            let content = ActivityContent(
+                state: CallActivityAttributes.ContentState(stateLabel: "Ended", startedAt: startedAt),
+                staleDate: nil
+            )
+            await activity.end(content, dismissalPolicy: .immediate)
+        }
         await session.end()
         // ADR-4: transcript is buffered live and POSTed on hangup; the
         // backend's summary worker fills in the rest.

@@ -29,6 +29,8 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     private var agentSpeaking = false
     private var currentUtterance = ""
     private var userUtterance = ""
+    private var currentAgent: Agent?
+    private var didAttemptReconnect = false
 
     // Gemini Live audio contract: PCM16 in at 16 kHz, PCM16 out at 24 kHz.
     private let sendFormat = AVAudioFormat(
@@ -47,6 +49,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     func start(agent: Agent) async throws {
         continuation.yield(.state(.connecting))
         startedAt = Date()
+        currentAgent = agent
 
         // Same CallKit split as OpenAIRealtimeSession: real device goes
         // through CallKit (which activates the audio session), the
@@ -146,8 +149,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             case .failure(let error):
                 if !self.hasEnded {
                     log.error("ws receive failed: \(error, privacy: .public)")
-                    self.continuation.yield(.error("Connection lost"))
-                    Task { await self.end() }
+                    Task { await self.reconnectOrFail() }
                 }
             case .success(let message):
                 let data: Data? = switch message {
@@ -158,6 +160,32 @@ final class GeminiLiveSession: NSObject, VoiceSession {
                 if let data { self.handleServerMessage(data) }
                 self.listen()
             }
+        }
+    }
+
+    // One reconnect attempt with a fresh token before giving up —
+    // survives network blips. The audio engine keeps running throughout.
+    private func reconnectOrFail() async {
+        guard !hasEnded else { return }
+        guard !didAttemptReconnect, let agent = currentAgent else {
+            continuation.yield(.error("Connection lost"))
+            await end()
+            return
+        }
+        didAttemptReconnect = true
+        setupDone = false
+        continuation.yield(.state(.reconnecting))
+        ws?.cancel()
+        ws = nil
+        do {
+            try await Task.sleep(for: .seconds(1))
+            let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            guard token.provider == providerId else { throw URLError(.badServerResponse) }
+            try connect(token: token)
+        } catch {
+            log.error("reconnect failed: \(error, privacy: .public)")
+            continuation.yield(.error("Connection lost"))
+            await end()
         }
     }
 

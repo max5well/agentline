@@ -29,11 +29,14 @@ struct RootTabView: View {
     @State private var tab: Tab = .agents
     @State private var activeCall: Agent?
     @State private var editing: AgentEditTarget?
+    @State private var showTemplates = false
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $tab) {
-            AgentsListView(store: store, activeCall: $activeCall, editing: $editing)
+            AgentsListView(store: store, activeCall: $activeCall, editing: $editing, showTemplates: $showTemplates)
                 .tabItem { Label("Agents", systemImage: "person.2") }
                 .tag(Tab.agents)
             RecentsView(store: store)
@@ -52,8 +55,27 @@ struct RootTabView: View {
         .sheet(item: $editing) { target in
             AgentEditorView(agent: target.agent, records: store.records) { store.save($0) }
         }
+        .sheet(isPresented: $showTemplates) {
+            TemplateGalleryView { store.save($0) }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView { showTemplates = true }
+        }
         .task { await store.load() }
         .onAppear(perform: handleLaunchArguments)
+        .onAppear {
+            // First run only; never during UI-test hooks.
+            if !hasOnboarded && !ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-") }) {
+                showOnboarding = true
+                hasOnboarded = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .startCallIntent)) { note in
+            // Siri / App Intents: "Call Maya" (#27).
+            guard let id = note.object as? UUID,
+                  let agent = store.agents.first(where: { $0.id == id }) else { return }
+            activeCall = agent
+        }
         .preferredColorScheme(AppearanceMode(rawValue: appearance)?.colorScheme ?? nil)
     }
 
