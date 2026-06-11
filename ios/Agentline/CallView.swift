@@ -11,6 +11,7 @@ struct CallView: View {
     @State private var startedAt = Date.now
     @State private var muted = false
     @State private var captionsOn = true
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,6 +19,14 @@ struct CallView: View {
             Spacer()
             Orb(state: state)
             Spacer()
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.danger)
+                    .padding(.horizontal, 36)
+                    .padding(.bottom, 18)
+            }
             if captionsOn, let last = transcript.last, state == .agentSpeaking {
                 Text(last.text)
                     .font(.subheadline)
@@ -37,10 +46,12 @@ struct CallView: View {
                 switch event {
                 case .state(let s):
                     state = s
-                    if s == .ended { await endAndDismiss() }
+                    // On error, stay on screen so the message is readable;
+                    // the user leaves via the hang-up button.
+                    if s == .ended && errorMessage == nil { await endAndDismiss() }
                 case .transcript(let entry): transcript.append(entry)
                 case .costTick(let cents): costCents = cents
-                case .error: break
+                case .error(let message): errorMessage = message
                 }
             }
         }
