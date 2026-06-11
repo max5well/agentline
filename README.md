@@ -49,7 +49,7 @@ MVP ships with the `fast`/`big` OpenAI Realtime path only; the provider interfac
 - [x] All UI screens against MockVoiceSession: agent editor, call history, post-call summary, settings/tools — verified in simulator
 - [x] OpenAIRealtimeSession (WebRTC) + CallKit — compiles, untested until backend is live
 - [ ] End-to-end realtime call on device (blocked on backend deploy)
-- [ ] Backend deploy to Vercel (blocked on Supabase project + OpenAI key)
+- [x] Backend live on Vercel (`agentline-chi.vercel.app`) — agents, token minting, call records verified against Supabase + OpenAI
 - [ ] Post-call summary worker
 - [ ] Handoff fan-out (Hermes / OpenClaw / Claude via MCP)
 - [ ] PersonaPlex local tier
