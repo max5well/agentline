@@ -152,7 +152,8 @@ async function mintGemini(model: string, instructions: string, voice: string) {
 
   const expiresAt = Date.now() + 600_000;
   const res = await fetch(
-    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens:create",
+    // Plain collection POST — the AIP-style ":create" suffix 404s here.
+    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
     {
       method: "POST",
       headers: {
