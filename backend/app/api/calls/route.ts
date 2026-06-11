@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { distillMemory, summarizeCall } from "@/lib/summarize";
+import { classOf, getProfile, monthUsage, remainingQuota, OVERAGE_CENTS_PER_MIN } from "@/lib/billing";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
     cost_cents: body.costCents ?? null,
   };
   if (auth.userId) row.user_id = auth.userId;
+  if (body.model) row.model = body.model;
 
   const { data, error } = await supabase()
     .from("calls")
@@ -79,6 +81,41 @@ export async function POST(req: NextRequest) {
     }
   } catch (e) {
     console.error("summary worker failed", e);
+  }
+
+  // Overage: the part of this call beyond the monthly quota draws the
+  // prepaid credit at the published per-minute rate.
+  try {
+    if (auth.userId && endedAt) {
+      const profile = await getProfile(auth.userId);
+      const cls = classOf((body.model as string) ?? null, provider);
+      if (profile && cls !== "local") {
+        const callMinutes =
+          (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000;
+        // Usage already includes this call (inserted above).
+        const usage = await monthUsage(auth.userId);
+        const used = cls === "fast" ? usage.fastMinutes : usage.bigMinutes;
+        const usedBefore = used - callMinutes;
+        const remainingBefore = remainingQuota(
+          profile.plan, cls,
+          cls === "fast"
+            ? { fastMinutes: usedBefore, bigMinutes: 0 }
+            : { fastMinutes: 0, bigMinutes: usedBefore },
+        );
+        if (remainingBefore !== null) {
+          const billableMinutes = Math.max(0, callMinutes - remainingBefore);
+          const charge = Math.ceil(billableMinutes * OVERAGE_CENTS_PER_MIN[cls]);
+          if (charge > 0) {
+            await supabase()
+              .from("profiles")
+              .update({ credit_cents: Math.max(0, profile.credit_cents - charge) })
+              .eq("user_id", auth.userId);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("overage billing failed", e);
   }
 
   return NextResponse.json({ callId: data.id }, { status: 201 });

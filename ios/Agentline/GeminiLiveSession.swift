@@ -10,6 +10,7 @@ private let log = Logger(subsystem: "dev.max5well.Agentline", category: "gemini"
 // setup message; audio is captured and played with AVAudioEngine since
 // Gemini Live speaks raw PCM over the socket, not WebRTC.
 final class GeminiLiveSession: NSObject, VoiceSession {
+    private(set) var modelId: String?
     let providerId = "gemini-live"
     let events: AsyncStream<VoiceSessionEvent>
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
@@ -83,6 +84,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
 
         do {
             let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            modelId = token.model
             guard token.provider == providerId else {
                 throw NSError(domain: "Agentline", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: "Backend minted a \(token.provider) token for a \(providerId) session"

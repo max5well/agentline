@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { classOf, getProfile, monthUsage, remainingQuota } from "@/lib/billing";
 
 // Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
 // OpenAI Realtime, local rides Gemini until PersonaPlexSession exists.
@@ -92,6 +93,28 @@ export async function POST(req: NextRequest) {
         .map((c) => `- (${new Date(c.started_at).toDateString()}) ${c.summary}`)
         .join("\n");
       memory = `\n\nWhat you remember from your recent calls with Max, most recent first:\n${bullets}`;
+    }
+  }
+
+  // Quota gate: included minutes first, then prepaid credit (every
+  // plan, including Free), hard stop when both are gone.
+  if (auth.userId) {
+    const profile = await getProfile(auth.userId);
+    if (profile) {
+      const cls = classOf(model);
+      const remaining = remainingQuota(profile.plan, cls, await monthUsage(auth.userId));
+      if (remaining !== null && remaining <= 0 && profile.credit_cents <= 0) {
+        return NextResponse.json(
+          {
+            error:
+              cls === "big"
+                ? "You've used this month's big-brain minutes and your credit is empty. Add credit in Billing, or switch the agent to a fast model."
+                : "You've used this month's included minutes and your credit is empty. Add credit in Billing to keep talking.",
+            code: "quota_exceeded",
+          },
+          { status: 402 },
+        );
+      }
     }
   }
 

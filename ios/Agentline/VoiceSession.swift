@@ -26,6 +26,8 @@ enum VoiceSessionEvent {
 protocol VoiceSession: AnyObject {
     /// Stable provider identifier stored on call records (e.g. "openai-realtime").
     var providerId: String { get }
+    /// Model actually used, known once the token is minted; for metering.
+    var modelId: String? { get }
     var events: AsyncStream<VoiceSessionEvent> { get }
     func start(agent: Agent) async throws
     func setMuted(_ muted: Bool)

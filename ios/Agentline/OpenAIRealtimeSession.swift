@@ -9,6 +9,7 @@ private let log = Logger(subsystem: "dev.max5well.Agentline", category: "realtim
 // persona and voice are baked into the token server-side, so no session
 // config is sent from the app.
 final class OpenAIRealtimeSession: NSObject, VoiceSession {
+    private(set) var modelId: String?
     let providerId = "openai-realtime"
     let events: AsyncStream<VoiceSessionEvent>
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
@@ -82,6 +83,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
 
         do {
             let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            modelId = token.model
             try await connect(token: token)
             if let callId { CallKitController.shared.reportConnected(callId) }
             continuation.yield(.state(.listening))

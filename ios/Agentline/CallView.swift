@@ -132,7 +132,7 @@ struct CallView: View {
         let config = BackendConfig.current
         if config.isConfigured, !(session is MockVoiceSession) {
             try? await BackendClient(config: config).saveCall(
-                agentId: agent.id, provider: session.providerId,
+                agentId: agent.id, provider: session.providerId, model: session.modelId,
                 startedAt: startedAt, endedAt: .now,
                 transcript: transcript, costCents: costCents > 0 ? costCents : nil
             )

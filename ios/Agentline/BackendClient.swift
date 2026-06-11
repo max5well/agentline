@@ -25,6 +25,17 @@ struct BackendConfig {
     }
 }
 
+struct UsageReport: Codable {
+    struct ClassUsage: Codable {
+        let usedMinutes: Double
+        let quotaMinutes: Double?   // nil = unlimited
+    }
+    let plan: String
+    let creditCents: Int
+    let fast: ClassUsage
+    let big: ClassUsage
+}
+
 struct RealtimeToken: Codable {
     let clientSecret: String
     let expiresAt: Int
@@ -105,7 +116,15 @@ struct BackendClient {
             session = try await refresh(session)
             (data, status) = try await bareRequest(path, method: method, body: body, bearer: session.accessToken)
         }
-        guard (200..<300).contains(status) else { throw URLError(.badServerResponse) }
+        guard (200..<300).contains(status) else {
+            // Surface the server's message (e.g. quota exceeded) instead of
+            // a generic URL error.
+            struct Failure: Codable { let error: String }
+            if let message = (try? Self.decoder.decode(Failure.self, from: data))?.error {
+                throw AuthError.server(message)
+            }
+            throw URLError(.badServerResponse)
+        }
         return data
     }
 
@@ -196,10 +215,11 @@ struct BackendClient {
         return try Self.decoder.decode(RealtimeToken.self, from: data)
     }
 
-    func saveCall(agentId: UUID, provider: String, startedAt: Date, endedAt: Date, transcript: [TranscriptEntry], costCents: Int?) async throws {
+    func saveCall(agentId: UUID, provider: String, model: String?, startedAt: Date, endedAt: Date, transcript: [TranscriptEntry], costCents: Int?) async throws {
         struct Body: Encodable {
             let agentId: UUID
             let provider: String
+            let model: String?
             let startedAt: Date
             let endedAt: Date
             let transcript: [TranscriptEntry]
@@ -207,7 +227,18 @@ struct BackendClient {
         }
         _ = try await request(
             "/api/calls", method: "POST",
-            body: Body(agentId: agentId, provider: provider, startedAt: startedAt, endedAt: endedAt, transcript: transcript, costCents: costCents)
+            body: Body(agentId: agentId, provider: provider, model: model, startedAt: startedAt, endedAt: endedAt, transcript: transcript, costCents: costCents)
         )
+    }
+
+    func usage() async throws -> UsageReport {
+        let data = try await request("/api/usage")
+        return try Self.decoder.decode(UsageReport.self, from: data)
+    }
+
+    func addTestCredit() async throws -> Int {
+        struct Response: Codable { let creditCents: Int }
+        let data = try await request("/api/usage", method: "POST")
+        return try Self.decoder.decode(Response.self, from: data).creditCents
     }
 }
