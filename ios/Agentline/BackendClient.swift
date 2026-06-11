@@ -6,14 +6,19 @@ struct BackendConfig {
 
     var isConfigured: Bool { !appSecret.isEmpty }
 
-    // Scheme environment for dev; a real config screen can come later.
+    // Settings screen (UserDefaults) wins; scheme environment is the
+    // dev fallback — scheme edits don't survive xcodegen regeneration.
     static var current: BackendConfig {
+        let defaults = UserDefaults.standard
         let env = ProcessInfo.processInfo.environment
         var config = BackendConfig()
-        if let url = env["AGENTLINE_BACKEND_URL"].flatMap(URL.init(string:)) {
+        let urlString = defaults.string(forKey: "backend.url").flatMap { $0.isEmpty ? nil : $0 }
+            ?? env["AGENTLINE_BACKEND_URL"]
+        if let url = urlString.flatMap(URL.init(string:)) {
             config.baseURL = url
         }
-        config.appSecret = env["AGENTLINE_APP_SECRET"] ?? ""
+        config.appSecret = defaults.string(forKey: "backend.secret").flatMap { $0.isEmpty ? nil : $0 }
+            ?? env["AGENTLINE_APP_SECRET"] ?? ""
         return config
     }
 }

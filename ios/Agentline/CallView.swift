@@ -77,6 +77,12 @@ struct CallView: View {
             }
             .font(.footnote.monospacedDigit())
             .foregroundStyle(Theme.dim)
+            if session is MockVoiceSession {
+                Text("Demo mode — no backend configured (Settings)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.danger)
+                    .padding(.top, 6)
+            }
         }
     }
 

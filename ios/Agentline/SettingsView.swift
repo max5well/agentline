@@ -5,11 +5,40 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("handoff.askAfterCall") private var askAfterCall = true
     @AppStorage("handoff.includeTranscript") private var includeTranscript = false
+    @AppStorage("backend.url") private var backendURL = ""
+    @AppStorage("backend.secret") private var backendSecret = ""
     @State private var tools = HandoffTool.all
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                sectionLabel("Backend")
+                Text(BackendConfig.current.isConfigured
+                     ? "Connected — calls use the real voice provider."
+                     : "Not configured — calls run in demo mode with a scripted agent and no audio.")
+                    .font(.subheadline)
+                    .lineSpacing(3)
+                    .foregroundStyle(BackendConfig.current.isConfigured ? Color(hex: 0x93D7AA) : Theme.danger)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 12)
+                VStack(spacing: 0) {
+                    TextField("Backend URL", text: $backendURL, prompt: Text("https://agentline-chi.vercel.app"))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .padding(.horizontal, 16)
+                        .frame(height: 54)
+                    Divider().overlay(Color.white.opacity(0.075))
+                    SecureField("App secret", text: $backendSecret)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 16)
+                        .frame(height: 54)
+                }
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.text)
+                .glassCard()
+
                 sectionLabel("Connected tools")
                 Text("Connect destinations that can receive call summaries and transcripts after each call.")
                     .font(.subheadline)
