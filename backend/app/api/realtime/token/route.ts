@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
   // Memory: inject summaries of the last calls with this agent so it can
   // pick up where the previous conversation left off.
   let memory = "";
-  if (agent.memory_enabled) {
+  if (agent.memory_enabled && agent.memory_file) {
+    memory = `\n\nWhat you remember about Max and your past conversations:\n${agent.memory_file}`;
+  } else if (agent.memory_enabled) {
     const { data: recent } = await supabase()
       .from("calls")
       .select("summary, started_at")

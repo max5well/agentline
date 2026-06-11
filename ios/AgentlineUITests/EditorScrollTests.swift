@@ -5,7 +5,7 @@ final class EditorScrollTests: XCTestCase {
     // their sub-screens, and Memory & Context shows the toggle.
     func testEditorConversationRowsNavigate() {
         let app = XCUIApplication()
-        app.launchArguments = ["-screen-editor"]
+        app.launchArguments = ["-demo", "-screen-editor"]
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Edit Agent"].waitForExistence(timeout: 5), "editor did not open")
@@ -20,6 +20,7 @@ final class EditorScrollTests: XCTestCase {
 
     func testTabsExist() {
         let app = XCUIApplication()
+        app.launchArguments = ["-demo"]
         app.launch()
         for tab in ["Agents", "Recents", "Settings"] {
             XCTAssertTrue(app.tabBars.buttons[tab].waitForExistence(timeout: 5), "missing tab: \(tab)")

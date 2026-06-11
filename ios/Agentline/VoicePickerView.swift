@@ -7,15 +7,20 @@ struct VoicePickerView: View {
     @Binding var voiceStyle: String?
     @State private var profiles = VoiceProfileStore.load()
     @State private var showNewProfile = false
+    @State private var player = VoicePreviewPlayer()
 
     var body: some View {
         List {
             Section("Built-in voices") {
                 ForEach(VoiceOption.all) { option in
-                    voiceRow(id: option.id, name: option.label, detail: option.blurb) {
+                    voiceRow(id: option.id, name: option.label, detail: option.blurb,
+                             previewVoice: option.id, previewStyle: nil) {
                         voice = option.id
                         voiceStyle = nil
                     }
+                }
+                if let message = player.errorMessage {
+                    Text(message).font(.footnote).foregroundStyle(.red)
                 }
             }
             Section {
@@ -23,7 +28,8 @@ struct VoicePickerView: View {
                     voiceRow(
                         id: profile.id.uuidString,
                         name: profile.name,
-                        detail: profile.createdAt.formatted(date: .abbreviated, time: .omitted)
+                        detail: profile.createdAt.formatted(date: .abbreviated, time: .omitted),
+                        previewVoice: profile.baseVoice, previewStyle: profile.prompt
                     ) {
                         // A profile rides on a built-in voice and adds its
                         // prompt as the delivery style.
@@ -53,12 +59,23 @@ struct VoicePickerView: View {
         }
     }
 
-    private func voiceRow(id: String, name: String, detail: String, select: @escaping () -> Void) -> some View {
+    private func voiceRow(id: String, name: String, detail: String,
+                          previewVoice: String, previewStyle: String?,
+                          select: @escaping () -> Void) -> some View {
         Button(action: select) {
             HStack(spacing: 12) {
-                Image(systemName: "play.circle")
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
+                Button {
+                    Task { await player.play(id: id, voice: previewVoice, style: previewStyle) }
+                } label: {
+                    if player.loadingId == id {
+                        ProgressView().frame(width: 24)
+                    } else {
+                        Image(systemName: player.playingId == id ? "stop.circle.fill" : "play.circle")
+                            .font(.title3)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .buttonStyle(.plain)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name).foregroundStyle(.primary)
                     Text(detail)
@@ -89,6 +106,8 @@ struct NewVoiceProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var prompt = ""
+    @State private var previewed = false
+    @State private var player = VoicePreviewPlayer()
     let onSave: (VoiceProfile) -> Void
 
     private static let suggestions = ["calm narrator", "energetic coach", "posh butler"]
@@ -116,7 +135,31 @@ struct NewVoiceProfileView: View {
                 } header: {
                     Text("Describe the voice")
                 } footer: {
-                    Text("The prompt is stored, so the voice can be re-rendered on any provider. Audio preview is coming with the voice-render endpoint.")
+                    Text("The prompt is stored, so the voice can be re-rendered on any provider.")
+                }
+
+                Section {
+                    Button {
+                        Task {
+                            await player.play(id: "draft", voice: "marin", style: prompt)
+                            if player.errorMessage == nil { previewed = true }
+                        }
+                    } label: {
+                        if player.loadingId != nil {
+                            ProgressView().frame(maxWidth: .infinity)
+                        } else {
+                            Text(previewed ? "Play Preview Again" : "Generate Preview")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(prompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .listRowInsets(EdgeInsets())
+                    if let message = player.errorMessage {
+                        Text(message).font(.footnote).foregroundStyle(.red)
+                    }
+                } footer: {
+                    Text(previewed ? "This is how the profile sounds on the default voice." : "Generate a preview to hear the prompt before saving.")
                 }
             }
             .navigationTitle("New Voice Profile")
@@ -131,7 +174,7 @@ struct NewVoiceProfileView: View {
                         dismiss()
                     }
                     .bold()
-                    .disabled(prompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!previewed || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }

@@ -8,6 +8,45 @@ type TranscriptEntry = { role: string; text: string; t: number };
 
 export type CallDigest = { summary: string; intents: string[] };
 
+// Merges the latest call into the agent's rolling memory file — the
+// distilled prose the agent gets at the start of every call.
+export async function distillMemory(
+  agentName: string,
+  existingFile: string,
+  summary: string,
+): Promise<string | null> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            `You maintain the memory file of ${agentName}, an AI voice agent, about their ongoing conversations with Max. ` +
+            "Merge the new call summary into the existing file. Keep it under 250 words of plain prose: " +
+            "durable facts about Max, ongoing topics and where they left off, preferences, open follow-ups. " +
+            "Drop stale or superseded points. Reply with the updated file only.",
+        },
+        {
+          role: "user",
+          content: `Existing memory file:\n${existingFile || "(empty)"}\n\nNew call summary:\n${summary}`,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    console.error("distillMemory failed", res.status, await res.text());
+    return null;
+  }
+  const body = await res.json();
+  return body.choices?.[0]?.message?.content ?? null;
+}
+
 export async function summarizeCall(
   agentName: string,
   transcript: TranscriptEntry[],

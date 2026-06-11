@@ -26,6 +26,11 @@ struct SettingsView: View {
                                 .font(.footnote)
                         }
                     }
+                    NavigationLink {
+                        AnalyticsView(store: store)
+                    } label: {
+                        Label("Analytics", systemImage: "chart.bar")
+                    }
                     Picker(selection: $appearance) {
                         ForEach(AppearanceMode.allCases) { mode in
                             Text(mode.label).tag(mode.rawValue)
@@ -75,9 +80,9 @@ struct SettingsView: View {
                         HStack {
                             Label("Backend", systemImage: "server.rack")
                             Spacer()
-                            Text(BackendConfig.current.isConfigured ? "● Connected" : "Not configured")
+                            Text("● Connected")
                                 .font(.footnote)
-                                .foregroundStyle(BackendConfig.current.isConfigured ? .green : .red)
+                                .foregroundStyle(.green)
                         }
                     }
                 }
@@ -189,23 +194,18 @@ struct VoiceProfilesListView: View {
 // Backend URL/secret form, moved out of the main settings list (§3.11).
 struct BackendSettingsView: View {
     @AppStorage("backend.url") private var backendURL = ""
-    @AppStorage("backend.secret") private var backendSecret = ""
 
     var body: some View {
         Form {
             Section {
-                TextField("Backend URL", text: $backendURL, prompt: Text("https://agentline-chi.vercel.app"))
+                TextField("Custom backend URL (optional)", text: $backendURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                SecureField("App secret", text: $backendSecret)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
             } footer: {
-                Text(BackendConfig.current.isConfigured
-                     ? "Connected — calls use the real voice provider."
-                     : "Not configured — calls run in demo mode with a scripted agent and no audio.")
-                    .foregroundStyle(BackendConfig.current.isConfigured ? .green : .red)
+                Text(backendURL.isEmpty
+                     ? "Using the built-in production backend (\(BackendConfig.production.host ?? "")). Enter a URL only to point the app at a development backend."
+                     : "Overriding the built-in backend. Clear the field to go back to production.")
             }
         }
         .navigationTitle("Backend")

@@ -7,6 +7,8 @@ struct MemoryContextView: View {
     @Binding var agent: Agent
     var records: [CallRecord] = []
     @State private var showAll = false
+    @State private var editing = false
+    @State private var confirmReset = false
 
     var body: some View {
         List {
@@ -18,11 +20,22 @@ struct MemoryContextView: View {
 
             if agent.memoryEnabled {
                 Section {
-                    Text("The memory file is distilled automatically after every call. Editing it in the app is coming with the next backend update.")
+                    if (agent.memoryFile ?? "").isEmpty && !editing {
+                        Text("No memory yet — the file is written automatically after your next call.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        TextEditor(text: Binding(
+                            get: { agent.memoryFile ?? "" },
+                            set: { agent.memoryFile = $0; editing = true }
+                        ))
+                        .frame(minHeight: 140)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("Memory file")
+                } footer: {
+                    Text("Distilled automatically after every call and given to the agent when a call starts. Edits are saved with Done.")
                 }
 
                 if !records.isEmpty {
@@ -42,6 +55,18 @@ struct MemoryContextView: View {
                     }
                 }
             }
+
+            if agent.memoryEnabled, !(agent.memoryFile ?? "").isEmpty {
+                Section {
+                    Button("Reset Memory", role: .destructive) { confirmReset = true }
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .confirmationDialog("Reset memory?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Reset Memory", role: .destructive) { agent.memoryFile = "" }
+        } message: {
+            Text("\(agent.name.isEmpty ? "The agent" : agent.name) forgets everything from past calls. Saved with Done.")
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Memory & Context")

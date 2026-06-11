@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { summarizeCall } from "@/lib/summarize";
+import { distillMemory, summarizeCall } from "@/lib/summarize";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
@@ -42,21 +42,40 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase()
     .from("calls")
     .insert(row)
-    .select("id, agents(name)")
+    .select("id")
     .single();
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Summarize inline; a failure here must never lose the call record.
+  // (Separate agent fetch so a pre-0004 schema can't break the insert.)
   try {
-    const agentName =
-      (data.agents as unknown as { name: string })?.name ?? "Agent";
+    const { data: agent } = await supabase()
+      .from("agents")
+      .select("name, memory_file, memory_enabled")
+      .eq("id", agentId)
+      .maybeSingle<{ name: string; memory_file: string | null; memory_enabled: boolean }>();
+    const agentName = agent?.name ?? "Agent";
     const digest = await summarizeCall(agentName, transcript ?? []);
     if (digest) {
       await supabase()
         .from("calls")
         .update({ summary: digest.summary, intents: digest.intents })
         .eq("id", data.id);
+      // Roll the call into the agent's memory file (DESIGN-SPEC §3.10).
+      if (agent?.memory_enabled) {
+        const file = await distillMemory(
+          agentName,
+          agent.memory_file ?? "",
+          digest.summary,
+        );
+        if (file) {
+          await supabase()
+            .from("agents")
+            .update({ memory_file: file })
+            .eq("id", agentId);
+        }
+      }
     }
   } catch (e) {
     console.error("summary worker failed", e);

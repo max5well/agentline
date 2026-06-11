@@ -1,22 +1,25 @@
 import Foundation
 
 struct BackendConfig {
-    var baseURL = URL(string: "http://localhost:3000")!
-    var hasExplicitURL = false
+    static let production = URL(string: "https://agentline-chi.vercel.app")!
 
-    var isConfigured: Bool { hasExplicitURL }
+    var baseURL = production
+    var isConfigured = true
 
-    // Settings screen (UserDefaults) wins; scheme environment is the
-    // dev fallback — scheme edits don't survive xcodegen regeneration.
+    // Production is baked in — no setup step. Override order: demo launch
+    // flag (UI tests) > Settings screen (UserDefaults) > scheme env > prod.
     static var current: BackendConfig {
+        var config = BackendConfig()
+        if ProcessInfo.processInfo.arguments.contains("-demo") {
+            config.isConfigured = false
+            return config
+        }
         let defaults = UserDefaults.standard
         let env = ProcessInfo.processInfo.environment
-        var config = BackendConfig()
-        let urlString = defaults.string(forKey: "backend.url").flatMap { $0.isEmpty ? nil : $0 }
+        let override = defaults.string(forKey: "backend.url").flatMap { $0.isEmpty ? nil : $0 }
             ?? env["AGENTLINE_BACKEND_URL"]
-        if let url = urlString.flatMap(URL.init(string:)) {
+        if let url = override.flatMap(URL.init(string:)) {
             config.baseURL = url
-            config.hasExplicitURL = true
         }
         return config
     }
@@ -176,6 +179,11 @@ struct BackendClient {
 
     func saveAgent(_ agent: Agent) async throws {
         _ = try await request("/api/agents", method: "POST", body: agent)
+    }
+
+    func voicePreview(voice: String, style: String?) async throws -> Data {
+        struct Body: Encodable { let voice: String; let style: String? }
+        return try await request("/api/voice-preview", method: "POST", body: Body(voice: voice, style: style))
     }
 
     func deleteCall(id: UUID) async throws {
