@@ -13,8 +13,17 @@ function buildInstructions(agent: any, memory: string): string {
     ? `\n\nVoice and delivery: ${agent.voice_style}`
     : "";
   // Without a language anchor the model sometimes guesses the
-  // language from the first noisy audio frames.
-  return `${agent.persona}${style}\n\nAlways speak ${agent.language ?? "English"}, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
+  // language from the first noisy audio frames. `language` may hold a
+  // comma-separated list; the first entry is the default.
+  const languages = (agent.language ?? "English")
+    .split(",")
+    .map((l: string) => l.trim())
+    .filter(Boolean);
+  const languageRule =
+    languages.length > 1
+      ? `Speak ${languages[0]} by default. You may switch between ${languages.join(", ")} if Max does, but no other languages`
+      : `Always speak ${languages[0] ?? "English"}, unless your persona explicitly requires another language`;
+  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
 }
 
 // Mints a short-lived OpenAI Realtime client secret for one call,
