@@ -47,8 +47,24 @@ struct AgentEditorView: View {
                 languagePicker
                 formLabel("Voice")
                 voiceList
+                formLabel("Voice style")
+                TextField(
+                    "Optional: delivery, e.g. slow and warm, slight British accent, dry humor",
+                    text: Binding(get: { draft.voiceStyle ?? "" }, set: { draft.voiceStyle = $0 }),
+                    axis: .vertical
+                )
+                .focused($focusedField)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .lineSpacing(3)
+                .foregroundStyle(Theme.text.opacity(0.92))
+                .padding(14)
+                .frame(minHeight: 64, alignment: .topLeading)
+                .fieldChrome()
                 formLabel("Brain")
                 brainPicker
+                formLabel("Model")
+                modelPicker
                 formLabel("Memory")
                 Toggle(isOn: $draft.memoryEnabled) {
                     Text("Remembers past calls")
@@ -154,19 +170,97 @@ struct AgentEditorView: View {
     ]
 
     private var languagePicker: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Spoken languages")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Menu {
+                    ForEach(Self.languages, id: \.self) { lang in
+                        Button {
+                            toggleLanguage(lang)
+                        } label: {
+                            if draft.languages.contains(lang) {
+                                Label(lang, systemImage: "checkmark")
+                            } else {
+                                Text(lang)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(draft.languages.joined(separator: ", "))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 58)
+            Text("First language is the default; the agent switches when you do.")
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+        }
+        .glassCard()
+    }
+
+    private func toggleLanguage(_ lang: String) {
+        var current = draft.languages
+        if let idx = current.firstIndex(of: lang) {
+            if current.count > 1 { current.remove(at: idx) } // keep at least one
+        } else {
+            current.append(lang)
+        }
+        draft.language = current.joined(separator: ", ")
+    }
+
+    // Options must stay within the tier's provider family (the backend
+    // enforces this): big = OpenAI Realtime, local/fast = Gemini Live.
+    private var modelOptions: [(id: String?, label: String)] {
+        switch draft.tier {
+        case .big:
+            [(nil, "Auto (GPT Realtime)"),
+             ("gpt-realtime", "GPT Realtime"),
+             ("gpt-realtime-mini", "GPT Realtime Mini")]
+        case .fast, .local:
+            [(nil, "Auto (Gemini Flash)"),
+             ("gemini-2.5-flash-native-audio-preview-12-2025", "Gemini 2.5 Flash Audio")]
+        }
+    }
+
+    private var modelPicker: some View {
         HStack {
-            Text("Spoken language")
+            Text("Voice model")
                 .font(.system(size: 18))
                 .foregroundStyle(Theme.text)
             Spacer()
-            Picker("Language", selection: Binding(
-                get: { draft.languageOrDefault },
-                set: { draft.language = $0 }
-            )) {
-                ForEach(Self.languages, id: \.self) { Text($0).tag($0) }
+            Menu {
+                ForEach(modelOptions, id: \.label) { option in
+                    Button {
+                        draft.model = option.id
+                    } label: {
+                        if draft.model == option.id {
+                            Label(option.label, systemImage: "checkmark")
+                        } else {
+                            Text(option.label)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(modelOptions.first { $0.id == draft.model }?.label ?? draft.model ?? "Auto")
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                }
+                .foregroundStyle(Theme.accent)
             }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
@@ -215,7 +309,13 @@ struct AgentEditorView: View {
         VStack(spacing: 8) {
             HStack(spacing: 0) {
                 ForEach(Tier.allCases, id: \.self) { tier in
-                    Button { draft.tier = tier } label: {
+                    Button {
+                        draft.tier = tier
+                        // Model overrides are per provider family.
+                        if !modelOptions.contains(where: { $0.id == draft.model }) {
+                            draft.model = nil
+                        }
+                    } label: {
                         Text(tier.label)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(draft.tier == tier ? Color(hex: 0x130E08) : Theme.muted)

@@ -9,6 +9,7 @@ private let log = Logger(subsystem: "dev.max5well.Agentline", category: "realtim
 // persona and voice are baked into the token server-side, so no session
 // config is sent from the app.
 final class OpenAIRealtimeSession: NSObject, VoiceSession {
+    let providerId = "openai-realtime"
     let events: AsyncStream<VoiceSessionEvent>
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
 
@@ -54,6 +55,17 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         do {
             RTCAudioSession.sharedInstance().useManualAudio = true
             RTCAudioSession.sharedInstance().isAudioEnabled = false
+            // CallKit owns the AVAudioSession; hand activation over to WebRTC.
+            CallKitController.shared.onAudioActivated = { session in
+                let rtcSession = RTCAudioSession.sharedInstance()
+                rtcSession.audioSessionDidActivate(session)
+                rtcSession.isAudioEnabled = true
+            }
+            CallKitController.shared.onAudioDeactivated = { session in
+                let rtcSession = RTCAudioSession.sharedInstance()
+                rtcSession.isAudioEnabled = false
+                rtcSession.audioSessionDidDeactivate(session)
+            }
             CallKitController.shared.onMuteChanged = { [weak self] muted in
                 self?.audioTrack?.isEnabled = !muted
             }
@@ -134,6 +146,8 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         hasEnded = true
         log.info("session end() called")
         CallKitController.shared.onCallEnded = nil
+        CallKitController.shared.onAudioActivated = nil
+        CallKitController.shared.onAudioDeactivated = nil
         CallKitController.shared.endCall()
         dataChannel?.close()
         peerConnection?.close()

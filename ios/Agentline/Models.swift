@@ -13,14 +13,26 @@ struct Agent: Identifiable, Codable, Hashable {
     var persona: String
     var voice: String
     var tier: Tier
-    // Optional so rows from a pre-migration backend still decode.
+    // Optionals with defaults so rows from a pre-migration backend still
+    // decode and existing initializer call sites keep compiling.
     var language: String?
+    /// Delivery/style prompt ("slow, warm, slight British accent").
+    var voiceStyle: String? = nil
+    /// Explicit model override; nil = derived from tier on the backend.
+    var model: String? = nil
     var memoryEnabled: Bool
 
-    var languageOrDefault: String { language ?? "English" }
+    /// Comma-separated list in `language`; first entry is the default.
+    var languages: [String] {
+        (language ?? "English")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, emoji, persona, voice, tier, language
+        case id, name, emoji, persona, voice, tier, language, model
+        case voiceStyle = "voice_style"
         case memoryEnabled = "memory_enabled"
     }
 }

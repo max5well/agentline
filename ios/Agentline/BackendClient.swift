@@ -28,6 +28,10 @@ struct RealtimeToken: Codable {
     let expiresAt: Int
     let model: String
     let provider: String
+    // Gemini only: the session is configured by the app's setup message,
+    // so the backend hands the config over. OpenAI bakes it into the secret.
+    let instructions: String?
+    let voice: String?
 }
 
 struct BackendClient {

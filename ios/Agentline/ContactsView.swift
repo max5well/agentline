@@ -71,7 +71,7 @@ struct ContactsView: View {
                 // Pick up the record (and summary) of the call that just ended.
                 Task { await loadFromBackend() }
             }) { agent in
-                CallView(agent: agent, session: Self.makeSession())
+                CallView(agent: agent, session: Self.makeSession(for: agent))
             }
             .sheet(item: $editing) { target in
                 AgentEditorView(agent: target.agent) { saved in
@@ -137,10 +137,14 @@ struct ContactsView: View {
             ?? Agent(id: record.agentId, name: "Unknown", emoji: "👤", persona: "", voice: "marin", tier: .fast, language: nil, memoryEnabled: false)
     }
 
-    // Real provider when the backend is configured, mock otherwise.
-    static func makeSession() -> any VoiceSession {
+    // Real provider when the backend is configured, mock otherwise. The
+    // tier picks the provider, mirroring MODEL_BY_TIER on the backend:
+    // big → OpenAI Realtime, fast/local → Gemini Live (until PersonaPlex).
+    static func makeSession(for agent: Agent) -> any VoiceSession {
         guard let backend = backendIfConfigured() else { return MockVoiceSession() }
-        return OpenAIRealtimeSession(backend: backend)
+        return agent.tier == .big
+            ? OpenAIRealtimeSession(backend: backend)
+            : GeminiLiveSession(backend: backend)
     }
 
     static func backendIfConfigured() -> BackendClient? {

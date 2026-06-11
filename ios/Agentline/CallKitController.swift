@@ -1,5 +1,5 @@
+import AVFoundation
 import CallKit
-import WebRTC
 
 // System call integration: lock-screen controls, audio session ownership,
 // interruption by real calls. Real voice sessions report through this;
@@ -14,6 +14,11 @@ final class CallKitController: NSObject {
     // Set by the active voice session before starting a call.
     var onMuteChanged: ((Bool) -> Void)?
     var onCallEnded: (() -> Void)?
+    // CallKit owns the AVAudioSession; what happens on activation is
+    // provider-specific (WebRTC handoff vs. starting an AVAudioEngine),
+    // so the active session installs these too.
+    var onAudioActivated: ((AVAudioSession) -> Void)?
+    var onAudioDeactivated: ((AVAudioSession) -> Void)?
 
     private override init() {
         let config = CXProviderConfiguration()
@@ -69,16 +74,11 @@ extension CallKitController: CXProviderDelegate {
         action.fulfill()
     }
 
-    // CallKit owns the AVAudioSession; hand activation over to WebRTC.
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        let rtcSession = RTCAudioSession.sharedInstance()
-        rtcSession.audioSessionDidActivate(audioSession)
-        rtcSession.isAudioEnabled = true
+        onAudioActivated?(audioSession)
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        let rtcSession = RTCAudioSession.sharedInstance()
-        rtcSession.isAudioEnabled = false
-        rtcSession.audioSessionDidDeactivate(audioSession)
+        onAudioDeactivated?(audioSession)
     }
 }

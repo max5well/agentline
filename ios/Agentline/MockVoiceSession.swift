@@ -3,6 +3,7 @@ import Foundation
 // Simulator development without backend or provider. Cycles through call
 // states and emits a fake transcript so every CallView state is testable.
 final class MockVoiceSession: VoiceSession {
+    let providerId = "mock"
     let events: AsyncStream<VoiceSessionEvent>
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
     private var task: Task<Void, Never>?
