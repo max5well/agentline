@@ -75,7 +75,7 @@ struct HistoryView: View {
 
     private func agent(for record: CallRecord) -> Agent {
         agents.first { $0.id == record.agentId }
-            ?? Agent(id: record.agentId, name: "Unknown", emoji: "👤", persona: "", voice: "marin", tier: .fast, memoryEnabled: false)
+            ?? Agent(id: record.agentId, name: "Unknown", emoji: "👤", persona: "", voice: "marin", tier: .fast, language: nil, memoryEnabled: false)
     }
 
     private var filtered: [CallRecord] {

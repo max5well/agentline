@@ -40,6 +40,8 @@ struct AgentEditorView: View {
                     .padding(14)
                     .frame(minHeight: 132, alignment: .topLeading)
                     .fieldChrome()
+                formLabel("Language")
+                languagePicker
                 formLabel("Voice")
                 voiceList
                 formLabel("Brain")
@@ -129,6 +131,31 @@ struct AgentEditorView: View {
         }
         .padding(.horizontal, 18)
         .frame(height: 102)
+        .glassCard()
+    }
+
+    private static let languages = [
+        "English", "German", "Spanish", "French", "Italian",
+        "Portuguese", "Dutch", "Turkish", "Polish", "Japanese",
+    ]
+
+    private var languagePicker: some View {
+        HStack {
+            Text("Spoken language")
+                .font(.system(size: 18))
+                .foregroundStyle(Theme.text)
+            Spacer()
+            Picker("Language", selection: Binding(
+                get: { draft.languageOrDefault },
+                set: { draft.language = $0 }
+            )) {
+                ForEach(Self.languages, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 58)
         .glassCard()
     }
 
@@ -225,9 +252,16 @@ struct VoiceOption: Identifiable {
     let label: String
     let blurb: String
 
+    // OpenAI Realtime ships fixed voices — these are the usable ones.
+    // The *sound* isn't customizable, but speaking style can be steered
+    // through the persona ("speak slowly", "dry humor", accents).
     static let all: [VoiceOption] = [
         .init(id: "marin", label: "Calm", blurb: "Warm, steady, reassuring"),
         .init(id: "cedar", label: "Bright", blurb: "Clear and energetic"),
+        .init(id: "sage", label: "Gentle", blurb: "Soft-spoken and patient"),
+        .init(id: "ash", label: "Deep", blurb: "Low, serious, deliberate"),
+        .init(id: "coral", label: "Upbeat", blurb: "Friendly and lively"),
+        .init(id: "verse", label: "Expressive", blurb: "Dynamic, animated delivery"),
     ]
 }
 

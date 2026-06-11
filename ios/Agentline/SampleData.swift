@@ -8,19 +8,19 @@ extension Agent {
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
         name: "Maya", emoji: "📜",
         persona: "Modern history tutor. Socratic, opinionated, concrete.",
-        voice: "marin", tier: .big, memoryEnabled: true
+        voice: "marin", tier: .big, language: "English", memoryEnabled: true
     )
     static let marco = Agent(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
         name: "Marco", emoji: "🌱",
         persona: "Startup sparring partner. Challenges every assumption.",
-        voice: "cedar", tier: .fast, memoryEnabled: true
+        voice: "cedar", tier: .fast, language: "English", memoryEnabled: true
     )
     static let elena = Agent(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
         name: "Elena", emoji: "🗣️",
         persona: "Spanish coach. Conversational immersion, gentle corrections.",
-        voice: "marin", tier: .fast, memoryEnabled: true
+        voice: "marin", tier: .fast, language: "Spanish", memoryEnabled: true
     )
 
     static let samples: [Agent] = [maya, marco, elena]

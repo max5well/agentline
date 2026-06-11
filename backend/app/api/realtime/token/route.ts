@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         model,
         // Without a language anchor the model sometimes guesses the
         // language from the first noisy audio frames.
-        instructions: `${agent.persona}\n\nAlways speak English, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence (e.g. "Hey Max, how are you doing today?"), then let him lead.${memory}`,
+        instructions: `${agent.persona}\n\nAlways speak ${agent.language ?? "English"}, unless your persona explicitly requires another language. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`,
         audio: {
           input: { transcription: { model: "whisper-1" } },
           output: { voice: agent.voice },

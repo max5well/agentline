@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     emoji: body.emoji ?? "🤖",
     voice: body.voice ?? "marin",
     tier: body.tier ?? "fast",
+    language: body.language ?? "English",
     memory_enabled: body.memory_enabled ?? true,
     updated_at: new Date().toISOString(),
   };

@@ -13,10 +13,14 @@ struct Agent: Identifiable, Codable, Hashable {
     var persona: String
     var voice: String
     var tier: Tier
+    // Optional so rows from a pre-migration backend still decode.
+    var language: String?
     var memoryEnabled: Bool
 
+    var languageOrDefault: String { language ?? "English" }
+
     enum CodingKeys: String, CodingKey {
-        case id, name, emoji, persona, voice, tier
+        case id, name, emoji, persona, voice, tier, language
         case memoryEnabled = "memory_enabled"
     }
 }
