@@ -8,6 +8,9 @@ export async function uploadAvatar(
   const res = await fetch(`${base}/storage/v1/object/avatars/${path}`, {
     method: "POST",
     headers: {
+      // New-format (sb_secret_) keys aren't JWTs — storage wants them in
+      // the apikey header, not just as a Bearer token.
+      apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
       "Content-Type": "image/png",
       "x-upsert": "true",
