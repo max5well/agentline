@@ -44,7 +44,10 @@ MVP ships with the `fast`/`big` OpenAI Realtime path only; the provider interfac
 ## Status
 
 - [x] Backend scaffold: ephemeral token endpoint, Supabase schema
-- [ ] iOS app: call screen + WebRTC + CallKit (blocked on Xcode install)
+- [x] Final design screens: [agentline-design/screens](https://github.com/max5well/agentline-design)
+- [x] iOS source skeleton: theme, models, VoiceSession protocol, mock session, contacts + call views
+- [ ] First iOS build + WebRTC + CallKit (blocked on Xcode install)
+- [ ] Backend deploy to Vercel (blocked on Supabase project + OpenAI key)
 - [ ] Post-call summary worker
 - [ ] Handoff fan-out (Hermes / OpenClaw / Claude via MCP)
 - [ ] PersonaPlex local tier

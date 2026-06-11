@@ -1,0 +1,30 @@
+# XcodeGen project definition — run `xcodegen generate` in this directory
+# once Xcode is installed, then open Agentline.xcodeproj.
+name: Agentline
+options:
+  bundleIdPrefix: dev.max5well
+  deploymentTarget:
+    iOS: "18.0"
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    from: "120.0.0"
+targets:
+  Agentline:
+    type: application
+    platform: iOS
+    sources: [Agentline]
+    dependencies:
+      - package: WebRTC
+    info:
+      path: Agentline/Info.plist
+      properties:
+        CFBundleDisplayName: agentline
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio, voip]
+        NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
+    settings:
+      base:
+        SWIFT_VERSION: "5.10"
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
