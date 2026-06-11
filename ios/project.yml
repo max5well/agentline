@@ -14,10 +14,16 @@ targets:
     type: application
     platform: iOS
     sources: [Agentline]
-    entitlements:
-      path: Agentline/Agentline.entitlements
-      properties:
-        com.apple.developer.applesignin: [Default]
+    # Sign in with Apple needs a paid Apple Developer team; the free
+    # Personal Team (BF275FGFBQ) rejects the entitlement. Re-enable when
+    # Max joins the program — until then the Apple button errors at tap.
+    # entitlements:
+    #   path: Agentline/Agentline.entitlements
+    #   properties:
+    #     com.apple.developer.applesignin: [Default]
+    settings:
+      base:
+        DEVELOPMENT_TEAM: BF275FGFBQ
     dependencies:
       - package: WebRTC
   AgentlineUITests:
