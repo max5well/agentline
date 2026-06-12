@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { distillMemory, summarizeCall } from "@/lib/summarize";
 import { classOf, getProfile, monthUsage, remainingQuota, OVERAGE_CENTS_PER_MIN } from "@/lib/billing";
-import { callMCPTool } from "@/lib/mcp";
+import { pushDigestToMCPTool } from "@/lib/mcp";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
         if (mcp?.tool_name) {
           try {
-            await callMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
+            await pushDigestToMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
               title: `Call with ${agentName}`,
               date: startedAt,
               summary: digest.summary,
@@ -86,6 +86,31 @@ export async function POST(req: NextRequest) {
             });
           } catch (e) {
             console.error("MCP handoff failed", e);
+          }
+        }
+
+        // Generic webhook: fire-and-forget POST of the digest.
+        const profile = await getProfile(auth.userId);
+        if (profile?.webhook_url) {
+          try {
+            await fetch(profile.webhook_url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                event: "call.completed",
+                agent: agentName,
+                date: startedAt,
+                durationMinutes: endedAt
+                  ? Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000)
+                  : null,
+                summary: digest.summary,
+                actionItems: digest.intents,
+                transcript: transcript ?? [],
+              }),
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch (e) {
+            console.error("webhook delivery failed", e);
           }
         }
       }

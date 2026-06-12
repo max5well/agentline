@@ -40,13 +40,24 @@ extension Agent {
         return initials.isEmpty ? "?" : initials.uppercased()
     }
 
-    // Stable per-agent identity color from the iOS system palette
-    // (derived from the id until avatar config is persisted).
-    // Not Hashable.hashValue — that's seeded per process launch.
+    // Persisted color when chosen; otherwise stable per-agent identity
+    // color derived from the id (not Hashable.hashValue — that's seeded
+    // per process launch).
     var avatarColor: Color {
-        let palette: [Color] = [.blue, .green, .indigo, .orange, .pink, .purple, .teal]
+        if let color, let chosen = AgentPalette.color(named: color) { return chosen }
         let sum = id.uuidString.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return palette[sum % palette.count]
+        return AgentPalette.all[sum % AgentPalette.all.count].color
+    }
+}
+
+enum AgentPalette {
+    static let all: [(name: String, color: Color)] = [
+        ("blue", .blue), ("green", .green), ("indigo", .indigo),
+        ("orange", .orange), ("pink", .pink), ("purple", .purple), ("teal", .teal),
+    ]
+
+    static func color(named name: String) -> Color? {
+        all.first { $0.name == name }?.color
     }
 }
 

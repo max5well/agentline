@@ -9,7 +9,6 @@ struct SettingsView: View {
     @State private var auth = AuthStore.shared
     @State private var connections = ToolConnections()
     @State private var connectingTool: String?
-    @State private var showDriveInfo = false
 
     var body: some View {
         NavigationStack {
@@ -44,6 +43,7 @@ struct SettingsView: View {
                     ForEach(ConnectedToolsStore.all) { tool in
                         toolRow(tool)
                     }
+                    webhookRow
                     Toggle("Share transcript after calls", isOn: $shareTranscriptAfterCalls)
                 } header: {
                     Text("Connected tools")
@@ -117,18 +117,20 @@ struct SettingsView: View {
                 get: { connectingTool.map { ToolSheetID(id: $0) } },
                 set: { connectingTool = $0?.id }
             )) { sheet in
-                if sheet.id == "obsidian" {
+                switch sheet.id {
+                case "obsidian":
                     ObsidianConnectSheet { Task { await connections.refresh() } }
-                } else {
+                case "drive":
+                    DriveConnectSheet { Task { await connections.refresh() } }
+                case "webhook":
+                    WebhookConnectSheet(existing: connections.webhookURL) {
+                        Task { await connections.refresh() }
+                    }
+                default:
                     MCPConnectSheet(existing: connections.mcpConnection) {
                         Task { await connections.refresh() }
                     }
                 }
-            }
-            .alert("Google Drive", isPresented: $showDriveInfo) {
-                Button("OK") {}
-            } message: {
-                Text("Drive export needs a Google Cloud OAuth client — it's the next connector on the roadmap.")
             }
         }
     }
@@ -150,7 +152,7 @@ struct SettingsView: View {
             }
             Spacer()
             Button {
-                if tool.id == "drive" { showDriveInfo = true } else { connectingTool = tool.id }
+                connectingTool = tool.id
             } label: {
                 Text(connections.isConnected(tool.id) ? "Connected" : "Connect")
                     .font(.footnote.weight(.semibold))
@@ -158,6 +160,31 @@ struct SettingsView: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .tint(connections.isConnected(tool.id) ? .green : .accentColor)
+        }
+    }
+
+    private var webhookRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "link")
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 30, height: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Webhook")
+                Text("POST every call to your automation")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                connectingTool = "webhook"
+            } label: {
+                Text(connections.isConnected("webhook") ? "Connected" : "Connect")
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(connections.isConnected("webhook") ? .green : .accentColor)
         }
     }
 

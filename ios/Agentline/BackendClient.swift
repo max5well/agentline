@@ -214,6 +214,23 @@ struct BackendClient {
         return try Self.decoder.decode(Response.self, from: data).urls
     }
 
+    func webhookURL() async throws -> String? {
+        struct Wrapper: Codable { let url: String? }
+        let data = try await request("/api/webhook")
+        return try Self.decoder.decode(Wrapper.self, from: data).url
+    }
+
+    func setWebhook(url: String?) async throws {
+        struct Body: Encodable { let url: String? }
+        _ = try await request("/api/webhook", method: "POST", body: Body(url: url))
+    }
+
+    func testWebhook() async throws -> Bool {
+        struct Response: Codable { let ok: Bool }
+        let data = try await request("/api/webhook/test", method: "POST")
+        return try Self.decoder.decode(Response.self, from: data).ok
+    }
+
     func mcpStatus() async throws -> MCPConnection? {
         struct Wrapper: Codable { let connection: MCPConnection? }
         let data = try await request("/api/mcp")

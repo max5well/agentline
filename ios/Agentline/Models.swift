@@ -24,6 +24,8 @@ struct Agent: Identifiable, Codable, Hashable {
     var memoryFile: String? = nil
     /// Photo or generated avatar in the avatars bucket; nil = emoji/monogram.
     var avatarUrl: String? = nil
+    /// Avatar background color name (AgentPalette); nil = derived from id.
+    var color: String? = nil
     var memoryEnabled: Bool
 
     /// Comma-separated list in `language`; first entry is the default.
@@ -35,7 +37,7 @@ struct Agent: Identifiable, Codable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, emoji, persona, voice, tier, language, model
+        case id, name, emoji, persona, voice, tier, language, model, color
         case voiceStyle = "voice_style"
         case memoryFile = "memory_file"
         case avatarUrl = "avatar_url"

@@ -102,17 +102,4 @@ struct AgentEditorView: View {
     }
 }
 
-struct VoiceOption: Identifiable {
-    let id: String     // provider voice id
-    let label: String
-    let blurb: String
-
-    static let all: [VoiceOption] = [
-        .init(id: "marin", label: "Calm", blurb: "Warm, steady, reassuring"),
-        .init(id: "cedar", label: "Bright", blurb: "Clear and energetic"),
-        .init(id: "sage", label: "Gentle", blurb: "Soft-spoken and patient"),
-        .init(id: "ash", label: "Deep", blurb: "Low, serious, deliberate"),
-        .init(id: "coral", label: "Upbeat", blurb: "Friendly and lively"),
-        .init(id: "verse", label: "Expressive", blurb: "Dynamic, animated delivery"),
-    ]
-}
+// VoiceOption lives in VoiceCatalog.swift (full per-provider catalogs).

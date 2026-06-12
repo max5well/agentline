@@ -11,11 +11,6 @@ struct AvatarPickerView: View {
     @State private var uploading = false
     @State private var errorMessage: String?
 
-    private static let suggestedEmoji = [
-        "📜", "🌱", "🗣️", "🧠", "🎓", "💼", "🧭", "🎨",
-        "⚖️", "🔬", "🏛️", "💪", "🍳", "🎹", "✈️", "📈",
-    ]
-
     var body: some View {
         NavigationStack {
             List {
@@ -49,48 +44,11 @@ struct AvatarPickerView: View {
                     } label: {
                         Label("Generate Avatar", systemImage: "sparkles")
                     }
-                }
-
-                Section("Emoji") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
-                        ForEach(Self.suggestedEmoji, id: \.self) { emoji in
-                            Button {
-                                agent.emoji = emoji
-                                agent.avatarUrl = nil
-                            } label: {
-                                Text(emoji)
-                                    .font(.system(size: 26))
-                                    .frame(width: 36, height: 36)
-                                    .background(
-                                        agent.emoji == emoji && agent.avatarUrl == nil
-                                            ? Color.accentColor.opacity(0.2) : .clear,
-                                        in: Circle()
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Section {
-                    Button {
-                        agent.emoji = ""
-                        agent.avatarUrl = nil
+                    NavigationLink {
+                        EmojiColorView(agent: $agent)
                     } label: {
-                        HStack {
-                            Text("Monogram (\(agent.monogram))")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if agent.emoji.isEmpty && agent.avatarUrl == nil {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                                    .fontWeight(.semibold)
-                            }
-                        }
+                        Label("Emoji & Color", systemImage: "face.smiling")
                     }
-                } footer: {
-                    Text("Initials on the agent's color — the default for new agents.")
                 }
             }
             .navigationTitle("Avatar")
@@ -302,4 +260,111 @@ extension UIImage {
         }
         return result.jpegData(compressionQuality: 0.85)
     }
+}
+
+
+// Combined emoji + background color (or initials on a color) — one
+// sub-screen like photo/camera/generate.
+struct EmojiColorView: View {
+    @Binding var agent: Agent
+    @Environment(\.dismiss) private var dismiss
+
+    private static let suggestedEmoji = [
+        "📜", "🌱", "🗣️", "🧠", "🎓", "💼", "🧭", "🎨",
+        "⚖️", "🔬", "🏛️", "💪", "🍳", "🎹", "✈️", "📈",
+        "🦊", "🧘", "📚", "🌍", "⚽️", "🎬", "🩺", "💡",
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                AgentAvatar(agent: previewAgent, size: 96)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+            }
+
+            Section("Color") {
+                HStack(spacing: 14) {
+                    ForEach(AgentPalette.all, id: \.name) { entry in
+                        Button {
+                            agent.color = entry.name
+                        } label: {
+                            Circle()
+                                .fill(entry.color.gradient)
+                                .frame(width: 36, height: 36)
+                                .overlay(
+                                    Circle().stroke(Color.primary.opacity(selectedColorName == entry.name ? 0.8 : 0), lineWidth: 3)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+
+            Section {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
+                    ForEach(Self.suggestedEmoji, id: \.self) { emoji in
+                        Button {
+                            agent.emoji = emoji
+                            agent.avatarUrl = nil
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 26))
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    agent.emoji == emoji && agent.avatarUrl == nil
+                                        ? Color.accentColor.opacity(0.2) : .clear,
+                                    in: Circle()
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+                Button {
+                    agent.emoji = ""
+                    agent.avatarUrl = nil
+                } label: {
+                    HStack {
+                        Text("No emoji — initials (\(agent.monogram))")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if agent.emoji.isEmpty && agent.avatarUrl == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
+                                .fontWeight(.semibold)
+                        }
+                    }
+                }
+            } header: {
+                Text("Emoji")
+            } footer: {
+                Text("The emoji (or the agent's initials) sits on the color you picked above.")
+            }
+
+            Section {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Use this avatar").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .listRowInsets(EdgeInsets())
+            }
+        }
+        .navigationTitle("Emoji & Color")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Entering this screen means choosing the emoji/monogram style.
+            agent.avatarUrl = nil
+        }
+    }
+
+    private var selectedColorName: String {
+        agent.color ?? ""
+    }
+
+    private var previewAgent: Agent { agent }
 }

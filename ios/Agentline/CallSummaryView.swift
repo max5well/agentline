@@ -11,6 +11,8 @@ struct CallSummaryView: View {
     @State private var mcpConnected = false
     @State private var mcpBusy = false
     @State private var mcpStatus: String?
+    @State private var driveBusy = false
+    @State private var driveStatus: String?
     @AppStorage("handoff.includeTranscript") private var includeTranscript = false
 
     var body: some View {
@@ -53,6 +55,17 @@ struct CallSummaryView: View {
                     } label: {
                         sendRow("Save to Obsidian", logo: "ObsidianLogo")
                     }
+                }
+                if DriveConnector.isConnected {
+                    Button {
+                        Task { await exportToDrive() }
+                    } label: {
+                        HStack {
+                            sendRow(driveStatus ?? "Export to Google Drive", logo: "DriveLogo")
+                            if driveBusy { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(driveBusy)
                 }
                 if mcpConnected {
                     Button {
@@ -140,6 +153,17 @@ struct CallSummaryView: View {
             Text(title)
                 .foregroundStyle(Color.accentColor)
         }
+    }
+
+    private func exportToDrive() async {
+        driveBusy = true
+        do {
+            try await DriveConnector.export(record: record, agent: agent, includeTranscript: includeTranscript)
+            driveStatus = "Exported ✓"
+        } catch {
+            driveStatus = "Failed — \(error.localizedDescription)"
+        }
+        driveBusy = false
     }
 
     private func pushToMCP() async {

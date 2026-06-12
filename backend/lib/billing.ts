@@ -36,6 +36,7 @@ export function classOf(model: string | null, provider?: string): TierClass {
 export interface Profile {
   plan: string;
   credit_cents: number;
+  webhook_url?: string | null;
 }
 
 // Lazily creates the row; tolerates a pre-0005 schema by treating the
@@ -43,7 +44,7 @@ export interface Profile {
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase()
     .from("profiles")
-    .select("plan, credit_cents")
+    .select("plan, credit_cents, webhook_url")
     .eq("user_id", userId)
     .maybeSingle<Profile>();
   if (error) {

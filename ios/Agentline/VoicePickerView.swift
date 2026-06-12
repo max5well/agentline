@@ -11,17 +11,50 @@ struct VoicePickerView: View {
 
     var body: some View {
         List {
-            Section("Built-in voices") {
-                ForEach(VoiceOption.all) { option in
+            // Voice and delivery style compose: picking a voice keeps the
+            // style, picking a style keeps the voice.
+            Section {
+                ForEach(VoiceOption.openAI) { option in
                     voiceRow(id: option.id, name: option.label, detail: option.blurb,
-                             previewVoice: option.id, previewStyle: nil) {
+                             previewVoice: option.id, previewStyle: voiceStyle) {
                         voice = option.id
-                        voiceStyle = nil
                     }
                 }
                 if let message = player.errorMessage {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
+            } header: {
+                Text("Voices — Big tier")
+            } footer: {
+                Text("Native on Big (OpenAI); Fast agents get the closest Gemini voice.")
+            }
+            Section {
+                ForEach(VoiceOption.gemini) { option in
+                    voiceRow(id: option.id, name: option.label, detail: option.blurb,
+                             previewVoice: option.id, previewStyle: voiceStyle) {
+                        voice = option.id
+                    }
+                }
+            } header: {
+                Text("Voices — Fast & Local tiers")
+            } footer: {
+                Text("Native on Fast/Local (Gemini); Big agents get the closest OpenAI voice.")
+            }
+            Section {
+                voiceRow(id: "style-natural", name: "Natural", detail: "No styling — the voice as it comes",
+                         previewVoice: voice, previewStyle: nil) {
+                    voiceStyle = nil
+                }
+                ForEach(StylePreset.all) { preset in
+                    voiceRow(id: "style-\(preset.id)", name: preset.name, detail: preset.prompt,
+                             previewVoice: voice, previewStyle: preset.prompt) {
+                        voiceStyle = preset.prompt
+                    }
+                }
+            } header: {
+                Text("Delivery style")
+            } footer: {
+                Text("Styles shape how the selected voice performs — pace, mood, character. Previews play with the current voice.")
             }
             Section {
                 ForEach(profiles) { profile in
@@ -96,7 +129,11 @@ struct VoicePickerView: View {
         if let profile = profiles.first(where: { $0.id.uuidString == id }) {
             return voice == profile.baseVoice && voiceStyle == profile.prompt
         }
-        return voice == id && (voiceStyle ?? "").isEmpty
+        if id == "style-natural" { return (voiceStyle ?? "").isEmpty }
+        if let preset = StylePreset.all.first(where: { "style-\($0.id)" == id }) {
+            return voiceStyle == preset.prompt
+        }
+        return voice == id
     }
 }
 

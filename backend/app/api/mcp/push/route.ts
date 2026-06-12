@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { callMCPTool } from "@/lib/mcp";
+import { pushDigestToMCPTool } from "@/lib/mcp";
 
 // Manual (re-)push of one call to the connected MCP tool — the "Send
 // via MCP" row on the call summary. The automatic push happens on hangup.
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const agentName =
     (call.agents as unknown as { name: string })?.name ?? "Agent";
   try {
-    await callMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
+    await pushDigestToMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
       title: `Call with ${agentName}`,
       date: call.started_at,
       summary: call.summary ?? "",

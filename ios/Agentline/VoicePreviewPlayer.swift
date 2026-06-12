@@ -21,12 +21,15 @@ final class VoicePreviewPlayer {
         errorMessage = nil
         defer { loadingId = nil }
         do {
+            // Voice rows preview with the current style and style rows with
+            // the current voice, so cache by the actual combination.
+            let key = "\(voice)|\(style ?? "")"
             let data: Data
-            if let cached = cache[id] {
+            if let cached = cache[key] {
                 data = cached
             } else {
                 data = try await BackendClient(config: .current).voicePreview(voice: voice, style: style)
-                cache[id] = data
+                cache[key] = data
             }
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)

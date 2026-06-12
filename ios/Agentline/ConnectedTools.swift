@@ -65,13 +65,17 @@ enum ObsidianConnector {
 @Observable
 final class ToolConnections {
     var obsidianConnected = ObsidianConnector.isConnected
+    var driveConnected = DriveConnector.isConnected
     var mcpConnection: MCPConnection?
+    var webhookURL: String?
     var loaded = false
 
     func refresh() async {
         obsidianConnected = ObsidianConnector.isConnected
+        driveConnected = DriveConnector.isConnected
         if let backend = AppStore.backendIfConfigured() {
             mcpConnection = try? await backend.mcpStatus()
+            webhookURL = (try? await backend.webhookURL()) ?? nil
         }
         loaded = true
     }
@@ -81,7 +85,9 @@ final class ToolConnections {
     func isConnected(_ toolId: String) -> Bool {
         switch toolId {
         case "obsidian": obsidianConnected
+        case "drive": driveConnected
         case "mcp": mcpConnected
+        case "webhook": webhookURL != nil
         default: false
         }
     }
