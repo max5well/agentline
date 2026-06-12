@@ -10,8 +10,15 @@ import SwiftUI
 enum DriveConnector {
     private static let scope = "https://www.googleapis.com/auth/drive.file"
 
+    // iOS OAuth client IDs are public by design — baked in as default,
+    // still overridable from the connect sheet.
+    static let defaultClientID = "44703078725-4sgf9tct3p3heis7rvpo8s5ki44cgh5l.apps.googleusercontent.com"
+
     static var clientID: String {
-        get { UserDefaults.standard.string(forKey: "drive.clientID") ?? "" }
+        get {
+            let stored = UserDefaults.standard.string(forKey: "drive.clientID") ?? ""
+            return stored.isEmpty ? defaultClientID : stored
+        }
         set { UserDefaults.standard.set(newValue, forKey: "drive.clientID") }
     }
 
