@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Quota gate: included minutes first, then prepaid credit (every
-  // plan, including Free), hard stop when both are gone.
+  // Quota gate: included minutes first, then prepaid credit on paid
+  // plans, hard stop when both are gone (Free never draws credit).
   if (auth.userId) {
     const profile = await getProfile(auth.userId);
     if (profile) {
@@ -106,6 +106,22 @@ export async function POST(req: NextRequest) {
       // Paid plans overflow onto prepaid credit; Free hard-stops at quota.
       const creditLeft = canUseCredit(profile.plan) && profile.credit_cents > 0;
       if (remaining !== null && remaining <= 0 && !creditLeft) {
+        // The hit rate of this wall (especially plan=free) is the signal
+        // for revisiting pay-as-you-go on Free. Tolerates a pre-0009 schema.
+        await supabase()
+          .from("events")
+          .insert({
+            user_id: auth.userId,
+            type: "quota_exceeded",
+            meta: { plan: profile.plan, class: cls },
+          })
+          .then(({ error: e }) => {
+            if (e)
+              console.warn(
+                "event insert failed (run migration 0009?):",
+                e.message,
+              );
+          });
         return NextResponse.json(
           {
             error: !canUseCredit(profile.plan)
