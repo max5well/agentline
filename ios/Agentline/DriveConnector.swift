@@ -8,7 +8,20 @@ import SwiftUI
 // Keychain. Needs a Google Cloud OAuth client ID (iOS type), pasted once
 // in the connect sheet.
 enum DriveConnector {
-    private static let scope = "https://www.googleapis.com/auth/drive.file"
+    // drive.file: only files the app creates. openid/email: show which
+    // account is connected.
+    private static let scope = "https://www.googleapis.com/auth/drive.file openid email"
+
+    /// Folder (created by the app in the user's Drive) where exports land.
+    static var folderName: String {
+        get {
+            let stored = UserDefaults.standard.string(forKey: "drive.folderName") ?? ""
+            return stored.isEmpty ? "agentline" : stored
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "drive.folderName") }
+    }
+
+    static var connectedEmail: String? { KeychainDriveToken.load()?.email }
 
     // iOS OAuth client IDs are public by design — baked in as default,
     // still overridable from the connect sheet.
@@ -91,7 +104,8 @@ enum DriveConnector {
         token = DriveToken(
             accessToken: refreshed.accessToken,
             refreshToken: token.refreshToken,   // refresh grants omit it
-            expiresAt: refreshed.expiresAt
+            expiresAt: refreshed.expiresAt,
+            email: refreshed.email ?? token.email
         )
         KeychainDriveToken.save(token)
         return token.accessToken
@@ -114,13 +128,48 @@ enum DriveConnector {
             let access_token: String
             let refresh_token: String?
             let expires_in: Double
+            let id_token: String?
         }
         let parsed = try JSONDecoder().decode(Response.self, from: data)
+        let email = parsed.id_token.flatMap { AuthView.decodeJWTClaims($0)["email"] as? String }
         return DriveToken(
             accessToken: parsed.access_token,
             refreshToken: parsed.refresh_token ?? "",
-            expiresAt: Date().addingTimeInterval(parsed.expires_in)
+            expiresAt: Date().addingTimeInterval(parsed.expires_in),
+            email: email
         )
+    }
+
+    // Find the export folder among app-created files, or create it.
+    private static func ensureFolder(accessToken: String) async throws -> String {
+        let name = folderName.replacingOccurrences(of: "'", with: "\\'")
+        var search = URLComponents(string: "https://www.googleapis.com/drive/v3/files")!
+        search.queryItems = [
+            URLQueryItem(name: "q", value: "name = '\(name)' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"),
+            URLQueryItem(name: "fields", value: "files(id)"),
+        ]
+        var req = URLRequest(url: search.url!)
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await URLSession.shared.data(for: req)
+        struct SearchResult: Codable { struct File: Codable { let id: String }; let files: [File] }
+        if let existing = (try? JSONDecoder().decode(SearchResult.self, from: data))?.files.first {
+            return existing.id
+        }
+
+        var create = URLRequest(url: URL(string: "https://www.googleapis.com/drive/v3/files")!)
+        create.httpMethod = "POST"
+        create.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        create.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        create.httpBody = try JSONSerialization.data(withJSONObject: [
+            "name": folderName,
+            "mimeType": "application/vnd.google-apps.folder",
+        ])
+        let (createData, response) = try await URLSession.shared.data(for: create)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let id = (try? JSONSerialization.jsonObject(with: createData) as? [String: Any])?["id"] as? String else {
+            throw AuthError.server("Could not create the Drive folder")
+        }
+        return id
     }
 
     // MARK: - Export
@@ -139,9 +188,11 @@ enum DriveConnector {
             md += record.transcript.map { "**\($0.role == "user" ? "Max" : agent.name):** \($0.text)" }.joined(separator: "\n")
         }
 
+        let folderId = try await ensureFolder(accessToken: accessToken)
         let metadata: [String: Any] = [
             "name": "Call with \(agent.name) — \(record.startedAt.formatted(.dateTime.year().month().day().hour().minute())).md",
             "mimeType": "text/markdown",
+            "parents": [folderId],
         ]
         let boundary = "agentline-\(UUID().uuidString)"
         var body = Data()
@@ -173,6 +224,7 @@ struct DriveToken: Codable {
     let accessToken: String
     let refreshToken: String
     let expiresAt: Date
+    var email: String? = nil
 }
 
 enum KeychainDriveToken {

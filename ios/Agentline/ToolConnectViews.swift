@@ -231,6 +231,7 @@ struct DriveConnectSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webSession
     @State private var clientID = DriveConnector.clientID
+    @State private var folderName = DriveConnector.folderName
     @State private var busy = false
     @State private var errorMessage: String?
     let onChange: () -> Void
@@ -240,8 +241,16 @@ struct DriveConnectSheet: View {
             Form {
                 if DriveConnector.isConnected {
                     Section {
-                        Label("Connected to Google Drive", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                        Label(
+                            DriveConnector.connectedEmail.map { "Connected as \($0)" } ?? "Connected to Google Drive",
+                            systemImage: "checkmark.circle.fill"
+                        )
+                        .foregroundStyle(.green)
+                        if DriveConnector.connectedEmail == nil {
+                            Button("Reconnect to show the account") {
+                                Task { await connect() }
+                            }
+                        }
                         Button("Disconnect", role: .destructive) {
                             DriveConnector.disconnect()
                             onChange()
@@ -249,6 +258,18 @@ struct DriveConnectSheet: View {
                         }
                     } footer: {
                         Text("Call summaries can be exported as Markdown from every call summary's “Send to” section.")
+                    }
+
+                    Section {
+                        TextField("Folder name", text: $folderName)
+                            .autocorrectionDisabled()
+                            .onChange(of: folderName) {
+                                DriveConnector.folderName = folderName
+                            }
+                    } header: {
+                        Text("Export folder")
+                    } footer: {
+                        Text("Exports land in this folder in your Drive — it's created automatically if it doesn't exist. (The app can only see folders it created itself.)")
                     }
                 } else {
                     Section {
