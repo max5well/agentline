@@ -139,11 +139,14 @@ struct AvatarPickerView: View {
     }
 }
 
-// Generated avatars (§5 source 3): description → two variants → tap to pick.
+// Generated avatars (§5 source 3): description → two variants →
+// explicit select + confirm.
 struct GenerateAvatarView: View {
     @Binding var agent: Agent
+    @Environment(\.dismiss) private var dismiss
     @State private var description = ""
     @State private var variants: [String] = []
+    @State private var selectedUrl: String?
     @State private var busy = false
     @State private var errorMessage: String?
 
@@ -152,10 +155,6 @@ struct GenerateAvatarView: View {
             Section {
                 TextField("Describe the avatar — looks, vibe, colors…", text: $description, axis: .vertical)
                     .lineLimit(2...5)
-                Button("Prefill from persona") {
-                    description = agent.persona
-                }
-                .disabled(agent.persona.isEmpty)
             } header: {
                 Text("Description")
             }
@@ -186,27 +185,49 @@ struct GenerateAvatarView: View {
                     HStack(spacing: 16) {
                         ForEach(variants, id: \.self) { urlString in
                             Button {
-                                agent.avatarUrl = urlString
+                                selectedUrl = urlString
                             } label: {
-                                AsyncImage(url: URL(string: urlString)) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    ProgressView()
-                                }
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle().stroke(
-                                        agent.avatarUrl == urlString ? Color.accentColor : .clear,
-                                        lineWidth: 3
+                                ZStack(alignment: .bottomTrailing) {
+                                    AsyncImage(url: URL(string: urlString)) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        ProgressView()
+                                    }
+                                    .frame(width: 120, height: 120)
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle().stroke(
+                                            selectedUrl == urlString ? Color.accentColor : Color(.separator),
+                                            lineWidth: selectedUrl == urlString ? 4 : 1
+                                        )
                                     )
-                                )
+                                    if selectedUrl == urlString {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title2)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, Color.accentColor)
+                                            .offset(x: -4, y: -4)
+                                    }
+                                }
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
+
+                    Button {
+                        agent.avatarUrl = selectedUrl
+                        agent.emoji = ""
+                        dismiss()
+                    } label: {
+                        Text("Use this avatar")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedUrl == nil)
+                    .listRowInsets(EdgeInsets())
                 }
             }
         }
