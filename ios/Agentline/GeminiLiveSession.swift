@@ -56,12 +56,17 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         // simulator has no call service so we activate it ourselves.
         #if targetEnvironment(simulator)
         let audioSession = AVAudioSession.sharedInstance()
-        try? audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
+        try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
+                                      options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
         try? audioSession.setActive(true)
         startAudioEngine()
         #else
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat)
+            // Bluetooth options make AirPods/headsets routable; CallKit
+            // surfaces them in the system audio-route picker.
+            try AVAudioSession.sharedInstance().setCategory(
+                .playAndRecord, mode: .voiceChat,
+                options: [.allowBluetoothHFP, .allowBluetoothA2DP])
             CallKitController.shared.onAudioActivated = { [weak self] _ in
                 self?.startAudioEngine()
             }
@@ -78,7 +83,8 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         } catch {
             log.error("CallKit unavailable, continuing without: \(error, privacy: .public)")
             let audioSession = AVAudioSession.sharedInstance()
-            try? audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
+            try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
+                                          options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
             try? audioSession.setActive(true)
             startAudioEngine()
             callId = nil

@@ -91,5 +91,7 @@ final class AuthStore {
     func signOut() {
         KeychainSession.clear()
         session = nil
+        // The launch cache holds the previous account's data.
+        AppStore.clearCache()
     }
 }

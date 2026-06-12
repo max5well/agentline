@@ -6,8 +6,22 @@ import SwiftUI
 @MainActor
 @Observable
 final class AppStore {
-    var agents: [Agent] = Agent.samples
-    var records: [CallRecord] = CallRecord.samples
+    var agents: [Agent]
+    var records: [CallRecord]
+
+    // With a backend configured, start from the last fetch (cached on
+    // disk) instead of sample fixtures — otherwise the samples flash for
+    // a second on every launch until load() returns. Samples remain the
+    // demo-mode data set.
+    init() {
+        if Self.backendIfConfigured() != nil {
+            agents = Self.readCache("agents.json") ?? []
+            records = Self.readCache("records.json") ?? []
+        } else {
+            agents = Agent.samples
+            records = CallRecord.samples
+        }
+    }
 
     static func backendIfConfigured() -> BackendClient? {
         let config = BackendConfig.current
@@ -28,11 +42,40 @@ final class AppStore {
         guard let backend = Self.backendIfConfigured() else { return }
         if let fetched = try? await backend.agents(), !fetched.isEmpty {
             agents = fetched
+            Self.writeCache(fetched, to: "agents.json")
         }
         if let fetched = try? await backend.calls() {
             records = fetched
+            Self.writeCache(fetched, to: "records.json")
         }
         cacheAgentsForSiri()
+    }
+
+    // MARK: - Launch cache (caches directory, JSON)
+
+    private static func cacheURL(_ name: String) -> URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(name)
+    }
+
+    private static func readCache<T: Decodable>(_ name: String) -> T? {
+        guard let data = try? Data(contentsOf: cacheURL(name)) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(T.self, from: data)
+    }
+
+    private static func writeCache<T: Encodable>(_ value: T, to name: String) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(value) {
+            try? data.write(to: cacheURL(name), options: .atomic)
+        }
+    }
+
+    static func clearCache() {
+        try? FileManager.default.removeItem(at: cacheURL("agents.json"))
+        try? FileManager.default.removeItem(at: cacheURL("records.json"))
     }
 
     // Siri's AgentEntityQuery resolves names from this cache, so "Call

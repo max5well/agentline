@@ -1,4 +1,5 @@
 import ActivityKit
+import AVKit
 import SwiftUI
 
 struct CallView: View {
@@ -111,7 +112,7 @@ struct CallView: View {
                     muted.toggle()
                     session.setMuted(muted)
                 }
-                ControlButton(icon: "speaker.wave.2.fill", label: "audio", active: false) {}
+                AudioRouteButton()
                 ControlButton(icon: "doc.text.fill", label: "transcript", active: showTranscript) {
                     showTranscript = true
                 }
@@ -175,6 +176,34 @@ struct CallView: View {
         }
         dismiss()
     }
+}
+
+// System audio-route picker (speaker / AirPods / headset) styled like the
+// other call controls. AVRoutePickerView opens the same popover the Phone
+// app uses, so Bluetooth and wired routes are switchable mid-call.
+struct AudioRouteButton: View {
+    var body: some View {
+        VStack(spacing: 7) {
+            RoutePickerView()
+                .frame(width: 62, height: 62)
+                .background(Color.white.opacity(0.16), in: Circle())
+            Text("audio")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.9))
+        }
+    }
+}
+
+private struct RoutePickerView: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.tintColor = .white
+        view.activeTintColor = .white
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }
 
 // 62pt circles, white 16% fill; active = filled white, black icon (§3.3).
