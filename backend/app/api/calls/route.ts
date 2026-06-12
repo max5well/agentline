@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
       }
 
       // Roll the call into the agent's memory file (DESIGN-SPEC §3.10).
-      if (agent?.memory_enabled) {
+      // Trivial calls carry no memory-worthy signal — skip the distill.
+      if (agent?.memory_enabled && !digest.trivial) {
         const file = await distillMemory(
           agentName,
           agent.memory_file ?? "",
