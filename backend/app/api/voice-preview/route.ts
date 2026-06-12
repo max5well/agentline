@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { OPENAI_FROM_GEMINI, resolveOpenAIVoice } from "@/lib/voices";
 
 // Renders a short voice sample so the picker and voice-profile editor
-// can preview voices (DESIGN-SPEC §3.7/§3.8). Uses OpenAI TTS — the
-// realtime voices are available there too; `style` carries the
-// voice-profile prompt as delivery instructions.
+// can preview voices (DESIGN-SPEC §3.7/§3.8). OpenAI voices render via
+// OpenAI TTS, Gemini prebuilt voices via Gemini TTS so the preview is
+// the real sound; `style` carries the voice-profile prompt as delivery
+// instructions on both.
 const SAMPLE =
   "Hey Max! This is how I sound. Ready when you are — just start talking.";
 
@@ -22,9 +24,24 @@ export async function POST(req: NextRequest) {
   if (!voice)
     return NextResponse.json({ error: "voice required" }, { status: 400 });
 
-  let res = await tts(voice, style);
-  if (res.status === 400 && FALLBACK[voice]) {
-    res = await tts(FALLBACK[voice], style);
+  if (voice in OPENAI_FROM_GEMINI && process.env.GEMINI_API_KEY) {
+    const wav = await geminiTTS(voice, style);
+    if (wav) {
+      return new NextResponse(new Uint8Array(wav), {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+    // fall through to the OpenAI approximation
+  }
+
+  const openaiVoice = resolveOpenAIVoice(voice);
+  let res = await openaiTTS(openaiVoice, style);
+  if (res.status === 400 && FALLBACK[openaiVoice]) {
+    res = await openaiTTS(FALLBACK[openaiVoice], style);
   }
   if (!res.ok) {
     console.error("voice preview failed", res.status, await res.text());
@@ -40,7 +57,7 @@ export async function POST(req: NextRequest) {
   });
 }
 
-function tts(voice: string, style?: string) {
+function openaiTTS(voice: string, style?: string) {
   return fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -54,4 +71,58 @@ function tts(voice: string, style?: string) {
       ...(style ? { instructions: style } : {}),
     }),
   });
+}
+
+// Gemini TTS returns raw 24 kHz 16-bit mono PCM; wrap it in a WAV header
+// for AVAudioPlayer. Style goes into the prompt (natural-language control).
+async function geminiTTS(
+  voice: string,
+  style?: string,
+): Promise<Buffer | null> {
+  const prompt = style ? `Say this — ${style}: ${SAMPLE}` : `Say: ${SAMPLE}`;
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": process.env.GEMINI_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+          },
+        },
+      }),
+    },
+  );
+  if (!res.ok) {
+    console.error("gemini tts failed", res.status, await res.text());
+    return null;
+  }
+  const json = await res.json();
+  const b64 = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!b64) return null;
+  return wav(Buffer.from(b64, "base64"), 24000);
+}
+
+function wav(pcm: Buffer, sampleRate: number): Buffer {
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16); // fmt chunk size
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28); // byte rate
+  header.writeUInt16LE(2, 32); // block align
+  header.writeUInt16LE(16, 34); // bits per sample
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { classOf, getProfile, monthUsage, remainingQuota } from "@/lib/billing";
+import { resolveGeminiVoice, resolveOpenAIVoice } from "@/lib/voices";
 
 // Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
 // OpenAI Realtime, local rides Gemini until PersonaPlexSession exists.
@@ -12,17 +13,6 @@ const MODEL_BY_TIER: Record<string, string> = {
   local: "gemini-2.5-flash-native-audio-preview-12-2025",
   fast: "gemini-2.5-flash-native-audio-preview-12-2025",
   big: "gpt-realtime",
-};
-
-// Agents store OpenAI voice ids; map each to the closest Gemini prebuilt
-// voice so one agent config works on both providers.
-const GEMINI_VOICE: Record<string, string> = {
-  marin: "Aoede", // calm, warm
-  cedar: "Zephyr", // bright, energetic
-  sage: "Achernar", // gentle, soft
-  ash: "Charon", // deep, serious
-  coral: "Puck", // upbeat, friendly
-  verse: "Fenrir", // expressive, dynamic
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,7 +92,11 @@ export async function POST(req: NextRequest) {
     const profile = await getProfile(auth.userId);
     if (profile) {
       const cls = classOf(model);
-      const remaining = remainingQuota(profile.plan, cls, await monthUsage(auth.userId));
+      const remaining = remainingQuota(
+        profile.plan,
+        cls,
+        await monthUsage(auth.userId),
+      );
       if (remaining !== null && remaining <= 0 && profile.credit_cents <= 0) {
         return NextResponse.json(
           {
@@ -130,7 +124,12 @@ export async function POST(req: NextRequest) {
     : mintOpenAI(model, instructions, agent.voice);
 }
 
-async function mintOpenAI(model: string, instructions: string, voice: string) {
+async function mintOpenAI(
+  model: string,
+  instructions: string,
+  rawVoice: string,
+) {
+  const voice = resolveOpenAIVoice(rawVoice);
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -215,6 +214,6 @@ async function mintGemini(model: string, instructions: string, voice: string) {
     // Gemini sessions are configured by the client's setup message, so the
     // app needs these; OpenAI bakes them into the secret server-side.
     instructions,
-    voice: GEMINI_VOICE[voice] ?? "Puck",
+    voice: resolveGeminiVoice(voice),
   });
 }
