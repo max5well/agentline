@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { distillMemory, summarizeCall } from "@/lib/summarize";
-import { classOf, getProfile, monthUsage, remainingQuota, OVERAGE_CENTS_PER_MIN } from "@/lib/billing";
+import {
+  canUseCredit,
+  classOf,
+  getProfile,
+  monthUsage,
+  remainingQuota,
+  OVERAGE_CENTS_PER_MIN,
+} from "@/lib/billing";
 import { pushDigestToMCPTool } from "@/lib/mcp";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
@@ -57,7 +64,11 @@ export async function POST(req: NextRequest) {
       .from("agents")
       .select("name, memory_file, memory_enabled")
       .eq("id", agentId)
-      .maybeSingle<{ name: string; memory_file: string | null; memory_enabled: boolean }>();
+      .maybeSingle<{
+        name: string;
+        memory_file: string | null;
+        memory_enabled: boolean;
+      }>();
     const agentName = agent?.name ?? "Agent";
     const digest = await summarizeCall(agentName, transcript ?? []);
     if (digest) {
@@ -80,8 +91,10 @@ export async function POST(req: NextRequest) {
               summary: digest.summary,
               actionItems: digest.intents,
               transcript: (transcript ?? [])
-                .map((e: { role: string; text: string }) =>
-                  `${e.role === "user" ? "Max" : agentName}: ${e.text}`)
+                .map(
+                  (e: { role: string; text: string }) =>
+                    `${e.role === "user" ? "Max" : agentName}: ${e.text}`,
+                )
                 .join("\n"),
             });
           } catch (e) {
@@ -101,7 +114,11 @@ export async function POST(req: NextRequest) {
                 agent: agentName,
                 date: startedAt,
                 durationMinutes: endedAt
-                  ? Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000)
+                  ? Math.round(
+                      (new Date(endedAt).getTime() -
+                        new Date(startedAt).getTime()) /
+                        60_000,
+                    )
                   : null,
                 summary: digest.summary,
                 actionItems: digest.intents,
@@ -141,26 +158,34 @@ export async function POST(req: NextRequest) {
     if (auth.userId && endedAt) {
       const profile = await getProfile(auth.userId);
       const cls = classOf((body.model as string) ?? null, provider);
-      if (profile && cls !== "local") {
+      // Free hard-stops at quota and never draws credit; only paid plans
+      // are billed for the overflow.
+      if (profile && canUseCredit(profile.plan) && cls !== "local") {
         const callMinutes =
-          (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000;
+          (new Date(endedAt).getTime() - new Date(startedAt).getTime()) /
+          60_000;
         // Usage already includes this call (inserted above).
         const usage = await monthUsage(auth.userId);
         const used = cls === "fast" ? usage.fastMinutes : usage.bigMinutes;
         const usedBefore = used - callMinutes;
         const remainingBefore = remainingQuota(
-          profile.plan, cls,
+          profile.plan,
+          cls,
           cls === "fast"
             ? { fastMinutes: usedBefore, bigMinutes: 0 }
             : { fastMinutes: 0, bigMinutes: usedBefore },
         );
         if (remainingBefore !== null) {
           const billableMinutes = Math.max(0, callMinutes - remainingBefore);
-          const charge = Math.ceil(billableMinutes * OVERAGE_CENTS_PER_MIN[cls]);
+          const charge = Math.ceil(
+            billableMinutes * OVERAGE_CENTS_PER_MIN[cls],
+          );
           if (charge > 0) {
             await supabase()
               .from("profiles")
-              .update({ credit_cents: Math.max(0, profile.credit_cents - charge) })
+              .update({
+                credit_cents: Math.max(0, profile.credit_cents - charge),
+              })
               .eq("user_id", auth.userId);
           }
         }

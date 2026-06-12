@@ -1,10 +1,25 @@
 import { supabase } from "@/lib/supabase";
 
-// Tiers and pay-as-you-go (decided 2026-06-12): every plan, including
-// Free, continues past its included minutes on prepaid credit. Hard
-// stop only when the credit is empty. Local-tier calls are free.
+// Tiers and pay-as-you-go (decided 2026-06-12): paid plans continue past
+// their included minutes on prepaid credit and hard-stop only when the
+// credit is empty; Free hard-stops at its quota and never draws credit.
+// Local-tier calls are free on every plan.
 
 export type TierClass = "fast" | "big" | "local";
+
+// Monthly prices; Stripe integration pending, so these are reference/
+// display values until then.
+export const PLAN_PRICE_CENTS: Record<string, number> = {
+  free: 0,
+  plus: 999,
+  pro: 2499,
+  max: 8999,
+};
+
+// Whether a plan may continue past its quota on prepaid credit.
+export function canUseCredit(plan: string): boolean {
+  return plan !== "free";
+}
 
 export const OVERAGE_CENTS_PER_MIN: Record<TierClass, number> = {
   fast: 10,

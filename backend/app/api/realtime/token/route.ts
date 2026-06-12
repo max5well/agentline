@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { classOf, getProfile, monthUsage, remainingQuota } from "@/lib/billing";
+import {
+  canUseCredit,
+  classOf,
+  getProfile,
+  monthUsage,
+  remainingQuota,
+} from "@/lib/billing";
 import { resolveGeminiVoice, resolveOpenAIVoice } from "@/lib/voices";
 
 // Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
@@ -97,11 +103,14 @@ export async function POST(req: NextRequest) {
         cls,
         await monthUsage(auth.userId),
       );
-      if (remaining !== null && remaining <= 0 && profile.credit_cents <= 0) {
+      // Paid plans overflow onto prepaid credit; Free hard-stops at quota.
+      const creditLeft = canUseCredit(profile.plan) && profile.credit_cents > 0;
+      if (remaining !== null && remaining <= 0 && !creditLeft) {
         return NextResponse.json(
           {
-            error:
-              cls === "big"
+            error: !canUseCredit(profile.plan)
+              ? "You've used this month's free minutes. Upgrade in Billing to keep talking."
+              : cls === "big"
                 ? "You've used this month's big-brain minutes and your credit is empty. Add credit in Billing, or switch the agent to a fast model."
                 : "You've used this month's included minutes and your credit is empty. Add credit in Billing to keep talking.",
             code: "quota_exceeded",
