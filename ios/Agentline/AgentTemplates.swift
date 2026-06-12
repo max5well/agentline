@@ -72,6 +72,7 @@ struct TemplateGalleryView: View {
                             Button(added.contains(template.id) ? "Added" : "Add") {
                                 onAdd(template.agent)
                                 added.insert(template.id)
+                                Analytics.capture("template_added", ["template": template.id])
                             }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.capsule)

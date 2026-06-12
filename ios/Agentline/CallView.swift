@@ -58,7 +58,13 @@ struct CallView: View {
                 }
             }
         }
-        .task { try? await session.start(agent: agent) }
+        .task {
+            Analytics.capture("call_started", [
+                "tier": agent.tier.rawValue, "provider": session.providerId,
+                "language": agent.language ?? "English",
+            ])
+            try? await session.start(agent: agent)
+        }
         .onAppear(perform: startActivity)
         .sheet(isPresented: $showTranscript) {
             LiveTranscriptPanel(agentName: agent.name, transcript: transcript, partial: partialCaption)
@@ -164,6 +170,13 @@ struct CallView: View {
             await activity.end(content, dismissalPolicy: .immediate)
         }
         await session.end()
+        Analytics.capture("call_ended", [
+            "duration_seconds": Int(Date.now.timeIntervalSince(startedAt)),
+            "tier": agent.tier.rawValue, "provider": session.providerId,
+            "model": session.modelId ?? "unknown", "cost_cents": costCents,
+            "transcript_turns": transcript.count,
+            "had_error": errorMessage != nil,
+        ])
         // ADR-4: transcript is buffered live and POSTed on hangup; the
         // backend's summary worker fills in the rest.
         let config = BackendConfig.current

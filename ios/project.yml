@@ -9,6 +9,9 @@ packages:
   WebRTC:
     url: https://github.com/stasel/WebRTC
     from: "120.0.0"
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    from: "3.0.0"
 targets:
   Agentline:
     type: application
@@ -42,6 +45,7 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
     dependencies:
       - package: WebRTC
+      - package: PostHog
       - target: AgentlineWidgets
         embed: true
   AgentlineWidgets:

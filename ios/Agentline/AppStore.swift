@@ -90,8 +90,14 @@ final class AppStore {
     func save(_ agent: Agent) {
         if let idx = agents.firstIndex(where: { $0.id == agent.id }) {
             agents[idx] = agent
+            Analytics.capture("agent_updated", ["tier": agent.tier.rawValue])
         } else {
             agents.append(agent)
+            Analytics.capture("agent_created", [
+                "tier": agent.tier.rawValue, "voice": agent.voice,
+                "language": agent.language ?? "English",
+                "agent_count": agents.count,
+            ])
         }
         if let backend = Self.backendIfConfigured() {
             Task { try? await backend.saveAgent(agent) }

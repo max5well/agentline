@@ -19,6 +19,7 @@ final class VoicePreviewPlayer {
         stop()
         loadingId = id
         errorMessage = nil
+        Analytics.capture("voice_preview_played", ["voice": voice])
         defer { loadingId = nil }
         do {
             // Voice rows preview with the current style and style rows with

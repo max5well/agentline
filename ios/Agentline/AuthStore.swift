@@ -86,6 +86,7 @@ final class AuthStore {
     func signedIn(_ session: AuthSession) {
         KeychainSession.save(session)
         self.session = session
+        Analytics.identify(userId: session.userId)
     }
 
     func signOut() {
@@ -93,5 +94,6 @@ final class AuthStore {
         session = nil
         // The launch cache holds the previous account's data.
         AppStore.clearCache()
+        Analytics.reset()
     }
 }

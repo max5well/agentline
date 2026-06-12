@@ -4,6 +4,13 @@ import SwiftUI
 struct AgentlineApp: App {
     @State private var auth = AuthStore.shared
 
+    init() {
+        Analytics.configure()
+        if let userId = AuthStore.shared.session?.userId {
+            Analytics.identify(userId: userId)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             // No backend configured → demo mode, no account needed (also
