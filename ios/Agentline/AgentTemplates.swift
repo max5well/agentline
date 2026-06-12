@@ -11,36 +11,41 @@ struct AgentTemplate: Identifiable {
     let tier: Tier
     let language: String
 
+    // Pre-generated portraits hosted in the public avatars bucket
+    // (avatars/templates/<id>.jpg) so the gallery and the created agent
+    // share one image — no per-user generation cost.
+    var avatarUrl: String {
+        "https://hwlkjbgidezoompnrkcu.supabase.co/storage/v1/object/public/avatars/templates/\(id).jpg"
+    }
+
     var agent: Agent {
         Agent(id: UUID(), name: name, emoji: emoji, persona: persona,
-              voice: voice, tier: tier, language: language, memoryEnabled: true)
+              voice: voice, tier: tier, language: language,
+              avatarUrl: avatarUrl, memoryEnabled: true)
     }
 
     static let all: [AgentTemplate] = [
-        .init(id: "tutor", name: "Maya", emoji: "📜",
-              persona: "Modern history tutor. Socratic, opinionated, concrete. Challenges assumptions with primary sources and keeps lessons conversational.",
-              voice: "marin", tier: .big, language: "English"),
-        .init(id: "sparring", name: "Marco", emoji: "🌱",
-              persona: "Startup sparring partner. Challenges every assumption, plays devil's advocate, pushes for concrete next steps before the call ends.",
+        .init(id: "news", name: "Vera", emoji: "🗞️",
+              persona: "News reporter. Briefs you on today's top stories like a sharp morning-radio anchor: headlines first, then detail on whatever you ask about. Uses web search to look up current news and always says when something is opinion rather than reporting.",
+              voice: "marin", tier: .fast, language: "English"),
+        .init(id: "startup", name: "Marco", emoji: "🌱",
+              persona: "Startup advisor. Challenges every assumption, plays devil's advocate, pushes for concrete next steps before the call ends.",
               voice: "cedar", tier: .fast, language: "English"),
-        .init(id: "spanish", name: "Elena", emoji: "🗣️",
-              persona: "Spanish coach. Conversational immersion with gentle corrections. Adapts difficulty to the learner and recaps mistakes at the end.",
-              voice: "marin", tier: .fast, language: "Spanish"),
+        .init(id: "history", name: "Maya", emoji: "📜",
+              persona: "Modern history teacher. Socratic, opinionated, concrete. Challenges assumptions with primary sources and keeps lessons conversational.",
+              voice: "marin", tier: .big, language: "English"),
         .init(id: "reflect", name: "Sam", emoji: "🧘",
               persona: "Thoughtful reflection partner. Asks open questions about your day, helps untangle decisions and feelings. Never gives unsolicited advice, mostly listens.",
               voice: "sage", tier: .fast, language: "English"),
-        .init(id: "interview", name: "Nora", emoji: "💼",
-              persona: "Tough but fair interview coach. Runs realistic job interviews for the role you name, then gives blunt, specific feedback on your answers.",
-              voice: "ash", tier: .big, language: "English"),
+        .init(id: "spanish", name: "Elena", emoji: "🗣️",
+              persona: "Spanish coach. Conversational immersion with gentle corrections. Adapts difficulty to the learner and recaps mistakes at the end.",
+              voice: "marin", tier: .fast, language: "Spanish"),
         .init(id: "stories", name: "Pip", emoji: "🦊",
               persona: "Children's storyteller. Spins gentle, imaginative bedtime stories and lets the listener steer the plot. Always kind, never scary.",
               voice: "coral", tier: .fast, language: "English"),
-        .init(id: "fitness", name: "Rocco", emoji: "💪",
-              persona: "No-nonsense fitness coach. Plans workouts, checks in on progress, keeps you accountable. Short answers, lots of energy.",
-              voice: "verse", tier: .fast, language: "English"),
-        .init(id: "chef", name: "Luca", emoji: "🍳",
-              persona: "Italian home-cooking mentor. Talks you through recipes step by step while you cook, improvises around whatever is in your fridge.",
-              voice: "coral", tier: .fast, language: "English"),
+        .init(id: "interview", name: "Nora", emoji: "💼",
+              persona: "Tough but fair interview coach. Runs realistic job interviews for the role you name, then gives blunt, specific feedback on your answers.",
+              voice: "ash", tier: .big, language: "English"),
     ]
 }
 
@@ -55,10 +60,7 @@ struct TemplateGalleryView: View {
                 Section {
                     ForEach(AgentTemplate.all) { template in
                         HStack(spacing: 12) {
-                            Text(template.emoji)
-                                .font(.system(size: 28))
-                                .frame(width: 44, height: 44)
-                                .background(Color(.tertiarySystemFill), in: Circle())
+                            AgentAvatar(agent: template.agent, size: 44)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(template.name).font(.body.weight(.semibold))
                                 Text(template.persona.components(separatedBy: ".").first ?? "")

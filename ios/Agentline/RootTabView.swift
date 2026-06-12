@@ -94,6 +94,8 @@ struct RootTabView: View {
             tab = .settings
         } else if args.contains("-screen-editor") {
             editing = AgentEditTarget(agent: store.agents.first)
+        } else if args.contains("-screen-templates") {
+            showTemplates = true
         }
     }
 }

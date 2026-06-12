@@ -129,6 +129,11 @@ final class GeminiLiveSession: NSObject, VoiceSession {
                     ],
                 ],
                 "systemInstruction": ["parts": [["text": token.instructions ?? ""]]],
+                // Google Search grounding — server-side tool, no client
+                // handling needed. The model only searches when the answer
+                // requires current information (verified to work with
+                // ephemeral tokens on the Constrained endpoint).
+                "tools": [["googleSearch": [:]]],
                 "inputAudioTranscription": [:],
                 "outputAudioTranscription": [:],
             ]
