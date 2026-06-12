@@ -300,4 +300,15 @@ struct BackendClient {
         let data = try await request("/api/usage", method: "POST")
         return try Self.decoder.decode(Response.self, from: data).creditCents
     }
+
+    // Reports StoreKit transactions (signed JWS); the backend sets the
+    // plan and tops up credit. fullSync = complete entitlement snapshot,
+    // where a missing subscription means it lapsed.
+    func appleSync(transactions: [String], fullSync: Bool) async throws {
+        struct Body: Encodable { let transactions: [String]; let fullSync: Bool }
+        _ = try await request(
+            "/api/billing/apple", method: "POST",
+            body: Body(transactions: transactions, fullSync: fullSync)
+        )
+    }
 }

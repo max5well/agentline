@@ -1,11 +1,14 @@
+import StoreKit
 import SwiftUI
 
 // Subscription & Billing (DESIGN-SPEC §3.12): server-metered usage,
-// included minutes per class, prepaid PAYG credit. Real credit
-// purchases arrive with StoreKit once the paid Apple account exists.
+// included minutes per class, prepaid PAYG credit. Plans and credit
+// packs are Apple In-App Purchases (StoreKit 2); local testing runs on
+// Agentline.storekit until App Store Connect products exist.
 struct BillingView: View {
     @Bindable var store: AppStore
     @State private var usage: UsageReport?
+    @State private var iap = StoreService()
     @State private var addingCredit = false
     @State private var errorMessage: String?
 
@@ -39,6 +42,22 @@ struct BillingView: View {
                 }
 
                 Section {
+                    ForEach(iap.plans, id: \.id) { product in
+                        planRow(product, currentPlan: usage.plan)
+                    }
+                    Button("Restore Purchases") {
+                        Task { await iap.restore(); await load() }
+                    }
+                    .font(.footnote)
+                } header: {
+                    Text("Plan")
+                } footer: {
+                    if iap.plans.isEmpty {
+                        Text("Plans unavailable — the App Store didn't return products. On a dev build, run with the StoreKit configuration.")
+                    }
+                }
+
+                Section {
                     HStack {
                         Text("Credit")
                         Spacer()
@@ -46,21 +65,26 @@ struct BillingView: View {
                             .monospacedDigit()
                             .foregroundStyle(usage.creditCents > 0 ? .primary : .secondary)
                     }
+                    ForEach(iap.credits, id: \.id) { product in
+                        creditRow(product)
+                    }
+                    #if DEBUG
                     Button {
                         Task { await addCredit() }
                     } label: {
                         if addingCredit {
                             ProgressView().frame(maxWidth: .infinity)
                         } else {
-                            Text("Add €5.00 credit (test)")
+                            Text("Add €5.00 credit (debug, no purchase)")
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    if let errorMessage {
-                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                    #endif
+                    if let message = errorMessage ?? iap.errorMessage {
+                        Text(message).font(.footnote).foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Test top-up — becomes an App Store purchase when the app ships.")
+                    Text("Credit covers calls beyond your plan's included minutes and never expires.")
                 }
             }
 
@@ -83,7 +107,64 @@ struct BillingView: View {
         .navigationTitle("Subscription & Billing")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .task { await iap.start(); await load() }
         .refreshable { await load() }
+    }
+
+    private func planRow(_ product: Product, currentPlan: String) -> some View {
+        let planId = product.id.components(separatedBy: ".").last ?? ""
+        let isCurrent = planId == currentPlan
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(product.displayName)
+                    .font(.body.weight(.medium))
+                Text(product.description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isCurrent {
+                Text("Current")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.green)
+            } else {
+                Button {
+                    Task {
+                        if await iap.purchase(product) { await load() }
+                    }
+                } label: {
+                    if iap.purchasingId == product.id {
+                        ProgressView()
+                    } else {
+                        Text("\(product.displayPrice)/mo")
+                            .font(.footnote.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+            }
+        }
+    }
+
+    private func creditRow(_ product: Product) -> some View {
+        HStack {
+            Text(product.displayName)
+            Spacer()
+            Button {
+                Task {
+                    if await iap.purchase(product) { await load() }
+                }
+            } label: {
+                if iap.purchasingId == product.id {
+                    ProgressView()
+                } else {
+                    Text(product.displayPrice)
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+        }
     }
 
     private func quotaRow(_ title: String, _ classUsage: UsageReport.ClassUsage) -> some View {

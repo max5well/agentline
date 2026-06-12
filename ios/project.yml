@@ -82,6 +82,8 @@ schemes:
         Agentline: all
     run:
       config: Debug
+      # Local IAP testing without App Store Connect (free Apple team).
+      storeKitConfiguration: Agentline/Agentline.storekit
     test:
       config: Debug
       targets: [AgentlineUITests]

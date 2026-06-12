@@ -1,0 +1,146 @@
+{
+  "identifier" : "A91E1D5B-0001-4C44-9D2D-AGENTLINE001",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "AGL_CREDIT5",
+      "localizations" : [
+        {
+          "description" : "€5.00 pay-as-you-go call credit",
+          "displayName" : "€5 Credit",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "dev.max5well.agentline.credit5",
+      "referenceName" : "Credit 5",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "AGL_CREDIT10",
+      "localizations" : [
+        {
+          "description" : "€10.00 pay-as-you-go call credit",
+          "displayName" : "€10 Credit",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "dev.max5well.agentline.credit10",
+      "referenceName" : "Credit 10",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : false,
+      "internalID" : "AGL_CREDIT20",
+      "localizations" : [
+        {
+          "description" : "€20.00 pay-as-you-go call credit",
+          "displayName" : "€20 Credit",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "dev.max5well.agentline.credit20",
+      "referenceName" : "Credit 20",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "AGL_PLANS",
+      "localizations" : [
+
+      ],
+      "name" : "Agentline Plans",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "AGL_PLUS",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "240 fast + 20 big-brain minutes monthly",
+              "displayName" : "Plus",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "dev.max5well.agentline.plus",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Plus",
+          "subscriptionGroupID" : "AGL_PLANS",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "24.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "AGL_PRO",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "600 fast + 120 big-brain minutes monthly",
+              "displayName" : "Pro",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "dev.max5well.agentline.pro",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro",
+          "subscriptionGroupID" : "AGL_PLANS",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "89.99",
+          "familyShareable" : false,
+          "groupNumber" : 3,
+          "internalID" : "AGL_MAX",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited fast + 500 big-brain minutes monthly",
+              "displayName" : "Max",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "dev.max5well.agentline.max",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Max",
+          "subscriptionGroupID" : "AGL_PLANS",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
