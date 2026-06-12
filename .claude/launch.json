@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "design-website",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "serve",
+        "-l",
+        "4173",
+        "../agentline-design/website"
+      ],
+      "port": 4173
+    }
+  ]
+}
