@@ -20,12 +20,16 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { voice, style } = await req.json();
+  const { voice, style, text } = await req.json();
   if (!voice)
     return NextResponse.json({ error: "voice required" }, { status: 400 });
+  // Style presets ship an in-character sample line — a generic sentence
+  // makes every style sound alike.
+  const sample =
+    typeof text === "string" && text.trim() ? text.slice(0, 200) : SAMPLE;
 
   if (voice in OPENAI_FROM_GEMINI && process.env.GEMINI_API_KEY) {
-    const wav = await geminiTTS(voice, style);
+    const wav = await geminiTTS(voice, sample, style);
     if (wav) {
       return new NextResponse(new Uint8Array(wav), {
         status: 200,
@@ -39,9 +43,9 @@ export async function POST(req: NextRequest) {
   }
 
   const openaiVoice = resolveOpenAIVoice(voice);
-  let res = await openaiTTS(openaiVoice, style);
+  let res = await openaiTTS(openaiVoice, sample, style);
   if (res.status === 400 && FALLBACK[openaiVoice]) {
-    res = await openaiTTS(FALLBACK[openaiVoice], style);
+    res = await openaiTTS(FALLBACK[openaiVoice], sample, style);
   }
   if (!res.ok) {
     console.error("voice preview failed", res.status, await res.text());
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
   });
 }
 
-function openaiTTS(voice: string, style?: string) {
+function openaiTTS(voice: string, sample: string, style?: string) {
   return fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -67,8 +71,8 @@ function openaiTTS(voice: string, style?: string) {
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
       voice,
-      input: SAMPLE,
-      ...(style ? { instructions: style } : {}),
+      input: sample,
+      ...(style ? { instructions: `Performance style: ${style}` } : {}),
     }),
   });
 }
@@ -77,9 +81,12 @@ function openaiTTS(voice: string, style?: string) {
 // for AVAudioPlayer. Style goes into the prompt (natural-language control).
 async function geminiTTS(
   voice: string,
+  sample: string,
   style?: string,
 ): Promise<Buffer | null> {
-  const prompt = style ? `Say this — ${style}: ${SAMPLE}` : `Say: ${SAMPLE}`;
+  const prompt = style
+    ? `Read this exactly once, performed ${style}: ${sample}`
+    : `Say: ${sample}`;
   const res = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
     {

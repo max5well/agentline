@@ -47,7 +47,7 @@ struct AgentEditorView: View {
                         conversationRow("globe", "Language", draft.languages.joined(separator: ", "))
                     }
                     NavigationLink {
-                        VoicePickerView(voice: $draft.voice, voiceStyle: $draft.voiceStyle)
+                        VoicePickerView(voice: $draft.voice, voiceStyle: $draft.voiceStyle, tier: draft.tier)
                     } label: {
                         conversationRow("mic", "Voice", voiceLabel)
                     }

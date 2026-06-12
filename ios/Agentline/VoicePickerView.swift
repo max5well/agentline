@@ -5,16 +5,23 @@ import SwiftUI
 struct VoicePickerView: View {
     @Binding var voice: String
     @Binding var voiceStyle: String?
+    /// The agent's tier decides which provider runs its calls, so only
+    /// that provider's native voices are offered.
+    var tier: Tier = .fast
     @State private var profiles = VoiceProfileStore.load()
     @State private var showNewProfile = false
     @State private var player = VoicePreviewPlayer()
+
+    private var nativeVoices: [VoiceOption] {
+        tier == .big ? VoiceOption.openAI : VoiceOption.gemini
+    }
 
     var body: some View {
         List {
             // Voice and delivery style compose: picking a voice keeps the
             // style, picking a style keeps the voice.
             Section {
-                ForEach(VoiceOption.openAI) { option in
+                ForEach(nativeVoices) { option in
                     voiceRow(id: option.id, name: option.label, detail: option.blurb,
                              previewVoice: option.id, previewStyle: voiceStyle) {
                         voice = option.id
@@ -24,21 +31,13 @@ struct VoicePickerView: View {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
             } header: {
-                Text("Voices — Big tier")
+                Text("Voices")
             } footer: {
-                Text("Native on Big (OpenAI); Fast agents get the closest Gemini voice.")
-            }
-            Section {
-                ForEach(VoiceOption.gemini) { option in
-                    voiceRow(id: option.id, name: option.label, detail: option.blurb,
-                             previewVoice: option.id, previewStyle: voiceStyle) {
-                        voice = option.id
-                    }
+                if nativeVoices.contains(where: { $0.id == voice }) {
+                    Text("Voices native to this agent's model (\(tier.label) tier). Changing the tier re-matches the voice automatically.")
+                } else {
+                    Text("The current voice “\(voice)” belongs to another tier's model — calls auto-match it to the closest voice here. Pick one to choose it directly.")
                 }
-            } header: {
-                Text("Voices — Fast & Local tiers")
-            } footer: {
-                Text("Native on Fast/Local (Gemini); Big agents get the closest OpenAI voice.")
             }
             Section {
                 voiceRow(id: "style-natural", name: "Natural", detail: "No styling — the voice as it comes",
@@ -47,14 +46,15 @@ struct VoicePickerView: View {
                 }
                 ForEach(StylePreset.all) { preset in
                     voiceRow(id: "style-\(preset.id)", name: preset.name, detail: preset.prompt,
-                             previewVoice: voice, previewStyle: preset.prompt) {
+                             previewVoice: voice, previewStyle: preset.prompt,
+                             previewText: preset.sample) {
                         voiceStyle = preset.prompt
                     }
                 }
             } header: {
                 Text("Delivery style")
             } footer: {
-                Text("Styles shape how the selected voice performs — pace, mood, character. Previews play with the current voice.")
+                Text("Styles shape how the selected voice performs — pace, mood, character. Each preview speaks an in-character sample with the current voice.")
             }
             Section {
                 ForEach(profiles) { profile in
@@ -94,11 +94,12 @@ struct VoicePickerView: View {
 
     private func voiceRow(id: String, name: String, detail: String,
                           previewVoice: String, previewStyle: String?,
+                          previewText: String? = nil,
                           select: @escaping () -> Void) -> some View {
         Button(action: select) {
             HStack(spacing: 12) {
                 Button {
-                    Task { await player.play(id: id, voice: previewVoice, style: previewStyle) }
+                    Task { await player.play(id: id, voice: previewVoice, style: previewStyle, text: previewText) }
                 } label: {
                     if player.loadingId == id {
                         ProgressView().frame(width: 24)

@@ -259,9 +259,9 @@ struct BackendClient {
         _ = try await request("/api/mcp/push", method: "POST", body: Body(callId: callId))
     }
 
-    func voicePreview(voice: String, style: String?) async throws -> Data {
-        struct Body: Encodable { let voice: String; let style: String? }
-        return try await request("/api/voice-preview", method: "POST", body: Body(voice: voice, style: style))
+    func voicePreview(voice: String, style: String?, text: String? = nil) async throws -> Data {
+        struct Body: Encodable { let voice: String; let style: String?; let text: String? }
+        return try await request("/api/voice-preview", method: "POST", body: Body(voice: voice, style: style, text: text))
     }
 
     func deleteCall(id: UUID) async throws {

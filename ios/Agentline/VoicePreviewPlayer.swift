@@ -11,7 +11,7 @@ final class VoicePreviewPlayer {
     private var player: AVAudioPlayer?
     private var cache: [String: Data] = [:]
 
-    func play(id: String, voice: String, style: String?) async {
+    func play(id: String, voice: String, style: String?, text: String? = nil) async {
         if playingId == id {
             stop()
             return
@@ -23,12 +23,12 @@ final class VoicePreviewPlayer {
         do {
             // Voice rows preview with the current style and style rows with
             // the current voice, so cache by the actual combination.
-            let key = "\(voice)|\(style ?? "")"
+            let key = "\(voice)|\(style ?? "")|\(text ?? "")"
             let data: Data
             if let cached = cache[key] {
                 data = cached
             } else {
-                data = try await BackendClient(config: .current).voicePreview(voice: voice, style: style)
+                data = try await BackendClient(config: .current).voicePreview(voice: voice, style: style, text: text)
                 cache[key] = data
             }
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
