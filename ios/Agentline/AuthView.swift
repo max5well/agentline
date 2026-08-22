@@ -14,6 +14,7 @@ struct AuthView: View {
     @State private var creatingAccount = false
     @State private var busy = false
     @State private var errorMessage: String?
+    @State private var successMessage: String?
     @State private var appleNonce = ""
 
     private var backend: BackendClient { BackendClient(config: BackendConfig.current) }
@@ -30,6 +31,15 @@ struct AuthView: View {
                     .padding(.bottom, 34)
 
                 emailForm
+
+                if let successMessage {
+                    Text(successMessage)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.green)
+                        .padding(.top, 14)
+                        .padding(.horizontal, 8)
+                }
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -52,6 +62,14 @@ struct AuthView: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .padding(.top, 16)
+
+                if !creatingAccount {
+                    Button("Forgot password?") {
+                        Task { await resetPassword() }
+                    }
+                    .font(.footnote)
+                    .padding(.top, 12)
+                }
 
                 divider
                     .padding(.vertical, 26)
@@ -151,10 +169,34 @@ struct AuthView: View {
         busy = true
         errorMessage = nil
         do {
-            let session = creatingAccount
-                ? try await backend.signUp(email: email, password: password)
-                : try await backend.logIn(email: email, password: password)
-            AuthStore.shared.signedIn(session)
+            if creatingAccount {
+                switch try await backend.signUp(email: email, password: password) {
+                case .session(let session):
+                    AuthStore.shared.signedIn(session)
+                case .confirmationRequired(let address):
+                    successMessage = "Check \(address) to verify your email, then return here to sign in."
+                    password = ""
+                }
+            } else {
+                AuthStore.shared.signedIn(try await backend.logIn(email: email, password: password))
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        busy = false
+    }
+
+
+    private func resetPassword() async {
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Enter your email first."
+            return
+        }
+        busy = true
+        errorMessage = nil
+        do {
+            try await backend.requestPasswordReset(email: email)
+            successMessage = "If that account exists, a password-reset email is on its way."
         } catch {
             errorMessage = error.localizedDescription
         }
