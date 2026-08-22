@@ -123,8 +123,8 @@ struct CallRecord: Identifiable, Codable, Hashable {
     let summary: String?
     let intents: [String]?
     let costCents: Int?
-    let objective: String?
-    let feedback: CallFeedback?
+    let objective: String? = nil
+    let feedback: CallFeedback? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, provider, transcript, summary, intents, objective, feedback
