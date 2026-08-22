@@ -16,6 +16,7 @@ struct AuthView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var appleNonce = ""
+    @State private var recoverySession: AuthSession?
 
     private var backend: BackendClient { BackendClient(config: BackendConfig.current) }
 
@@ -83,6 +84,15 @@ struct AuthView: View {
         .background(Color(.systemGroupedBackground))
         .disabled(busy)
         .overlay { if busy { ProgressView() } }
+        .onOpenURL(perform: handleAuthCallback)
+        .sheet(isPresented: Binding(
+            get: { recoverySession != nil },
+            set: { if !$0 { recoverySession = nil } }
+        )) {
+            if let recoverySession {
+                PasswordRecoveryView(session: recoverySession)
+            }
+        }
     }
 
     private var wordmark: some View {
@@ -256,6 +266,20 @@ struct AuthView: View {
             errorMessage = error.localizedDescription
         }
         busy = false
+    }
+
+
+    private func handleAuthCallback(_ url: URL) {
+        guard let session = Self.session(fromCallback: url) else { return }
+        let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment ?? ""
+        let isRecovery = fragment
+            .split(separator: "&")
+            .contains { $0 == "type=recovery" }
+        if isRecovery {
+            recoverySession = session
+        } else {
+            AuthStore.shared.signedIn(session)
+        }
     }
 
     // MARK: - Helpers
