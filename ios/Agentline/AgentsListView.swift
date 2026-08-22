@@ -4,7 +4,7 @@ import SwiftUI
 // row tap edits, green phone button calls.
 struct AgentsListView: View {
     @Bindable var store: AppStore
-    @Binding var activeCall: Agent?
+    @Binding var preparingCall: Agent?
     @Binding var editing: AgentEditTarget?
     @Binding var showTemplates: Bool
     @State private var query = ""
@@ -16,7 +16,7 @@ struct AgentsListView: View {
                     Button {
                         editing = AgentEditTarget(agent: agent)
                     } label: {
-                        AgentRow(agent: agent) { activeCall = agent }
+                        AgentRow(agent: agent) { preparingCall = agent }
                     }
                     .foregroundStyle(.primary)
                 }
