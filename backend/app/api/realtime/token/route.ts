@@ -10,15 +10,26 @@ import {
 } from "@/lib/billing";
 import { resolveGeminiVoice, resolveOpenAIVoice } from "@/lib/voices";
 
-// Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
-// OpenAI Realtime, local rides Gemini until PersonaPlexSession exists.
-// The provider is derived from the model name; the app derives its session
-// implementation from the tier the same way, so a per-agent model override
-// must stay within the tier's provider family (enforced below).
+const GEMINI_31 = "gemini-3.1-flash-live-preview";
+const GEMINI_25 = "gemini-2.5-flash-native-audio-preview-12-2025";
+const OPENAI_FAST = "gpt-realtime-2.1-mini";
+const OPENAI_SMART = "gpt-realtime-2.1";
+
+// Gemini 3.1 is the primary Fast model. Set GEMINI_LIVE_MODEL to the 2.5
+// model id for an instant rollback without shipping a new iOS build.
+const configuredGemini =
+  process.env.GEMINI_LIVE_MODEL === GEMINI_25 ? GEMINI_25 : GEMINI_31;
+
 const MODEL_BY_TIER: Record<string, string> = {
-  local: "gemini-2.5-flash-native-audio-preview-12-2025",
-  fast: "gemini-2.5-flash-native-audio-preview-12-2025",
-  big: "gpt-realtime",
+  local: configuredGemini,
+  fast: configuredGemini,
+  big: OPENAI_SMART,
+};
+
+const ALLOWED_MODELS_BY_TIER: Record<string, Set<string>> = {
+  local: new Set([GEMINI_31, GEMINI_25]),
+  fast: new Set([GEMINI_31, GEMINI_25, OPENAI_FAST]),
+  big: new Set([OPENAI_SMART]),
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,12 +75,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "agent not found" }, { status: 404 });
 
   const tierModel = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
-  const isGemini = tierModel.startsWith("gemini");
-  const override = typeof agent.model === "string" ? agent.model : "";
-  const model =
-    override && override.startsWith("gemini") === isGemini
-      ? override
-      : tierModel;
+  const requestedModel = typeof agent.model === "string" ? agent.model : "";
+  const allowedModels =
+    ALLOWED_MODELS_BY_TIER[agent.tier] ?? ALLOWED_MODELS_BY_TIER.fast;
+  const model = allowedModels.has(requestedModel)
+    ? requestedModel
+    : tierModel;
+  const isGemini = model.startsWith("gemini");
 
   // Memory: inject summaries of the last calls with this agent so it can
   // pick up where the previous conversation left off.
@@ -138,11 +150,10 @@ export async function POST(req: NextRequest) {
   }
 
   const instructions = buildInstructions(agent, memory);
-  // Until GEMINI_API_KEY is configured, Gemini tiers fall back to the
-  // OpenAI mini flow so calls keep working (the pre-Gemini behavior).
+  // Keep the Fast tier available when Gemini is not configured.
   if (isGemini && !process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY not set, falling back to gpt-realtime-mini");
-    return mintOpenAI("gpt-realtime-mini", instructions, agent.voice);
+    console.warn(`GEMINI_API_KEY not set, falling back to ${OPENAI_FAST}`);
+    return mintOpenAI(OPENAI_FAST, instructions, agent.voice);
   }
   return isGemini
     ? mintGemini(model, instructions, agent.voice)
