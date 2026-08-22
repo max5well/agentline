@@ -27,7 +27,8 @@ struct RootTabView: View {
 
     @State private var store = AppStore()
     @State private var tab: Tab = .agents
-    @State private var activeCall: Agent?
+    @State private var preparingCall: Agent?
+    @State private var activeCall: PreparedCall?
     @State private var editing: AgentEditTarget?
     @State private var showTemplates = false
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
@@ -36,7 +37,7 @@ struct RootTabView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            AgentsListView(store: store, activeCall: $activeCall, editing: $editing, showTemplates: $showTemplates)
+            AgentsListView(store: store, preparingCall: $preparingCall, editing: $editing, showTemplates: $showTemplates)
                 .tabItem { Label("Agents", systemImage: "person.2") }
                 .tag(Tab.agents)
             RecentsView(store: store)
@@ -46,11 +47,26 @@ struct RootTabView: View {
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(Tab.settings)
         }
+        .sheet(item: $preparingCall) { agent in
+            CallPreparationView(
+                agent: agent,
+                lastCall: store.records.first { $0.agentId == agent.id }
+            ) { objective in
+                preparingCall = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    activeCall = PreparedCall(agent: agent, objective: objective)
+                }
+            }
+        }
         .fullScreenCover(item: $activeCall, onDismiss: {
-            // Pick up the record (and summary) of the call that just ended.
             Task { await store.load() }
-        }) { agent in
-            CallView(agent: agent, session: AppStore.makeSession(for: agent))
+        }) { prepared in
+            CallView(
+                agent: prepared.agent,
+                objective: prepared.objective,
+                session: AppStore.makeSession(for: prepared.agent, objective: prepared.objective)
+            )
         }
         .sheet(item: $editing) { target in
             AgentEditorView(agent: target.agent, records: store.records) { store.save($0) }
@@ -74,7 +90,7 @@ struct RootTabView: View {
             // Siri / App Intents: "Call Maya" (#27).
             guard let id = note.object as? UUID,
                   let agent = store.agents.first(where: { $0.id == id }) else { return }
-            activeCall = agent
+            activeCall = PreparedCall(agent: agent, objective: nil)
         }
         .preferredColorScheme(AppearanceMode(rawValue: appearance)?.colorScheme ?? nil)
     }
@@ -86,7 +102,9 @@ struct RootTabView: View {
             // Presenting a cover during the initial transition gets dropped.
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(0.4))
-                activeCall = store.agents.first
+                if let agent = store.agents.first {
+                    activeCall = PreparedCall(agent: agent, objective: nil)
+                }
             }
         } else if args.contains("-screen-history") {
             tab = .recents
