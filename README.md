@@ -44,3 +44,5 @@ Before deploying or distributing the app, read:
 - [Production readiness](docs/PRODUCTION_READINESS.md)
 - [Product strategy](docs/PRODUCT_STRATEGY.md)
 - [Architecture decisions](docs/ARCHITECTURE.md)
+- [UI/UX review](docs/UX_REVIEW.md)
+- [Services and integrations](docs/INTEGRATIONS.md)
