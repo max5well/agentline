@@ -1,10 +1,5 @@
 import { X509Certificate, verify as cryptoVerify } from "node:crypto";
 
-// Apple In-App Purchase (decided 2026-06-13): StoreKit 2 in the app,
-// signed transactions (JWS) synced to /api/billing/apple, App Store
-// Server Notifications V2 for renewals. Stripe never enters; Apple is
-// the checkout.
-
 export const APP_BUNDLE_ID = "dev.max5well.Agentline";
 
 export const APPLE_PLAN_PRODUCTS: Record<string, string> = {
@@ -25,25 +20,19 @@ export function higherPlan(a: string, b: string): string {
   return (PLAN_RANK[a] ?? 0) >= (PLAN_RANK[b] ?? 0) ? a : b;
 }
 
-// Decoded JWSTransaction fields we use.
 export interface AppleTransaction {
   transactionId: string;
   originalTransactionId?: string;
   productId: string;
   bundleId: string;
   type: string;
-  purchaseDate?: number; // ms epoch
-  expiresDate?: number; // ms epoch, subscriptions only
+  purchaseDate?: number;
+  expiresDate?: number;
   appAccountToken?: string;
   environment?: string;
   revocationDate?: number;
 }
 
-// Verifies an App Store JWS (ES256, x5c chain rooted at Apple) and
-// returns the decoded payload. Set APPLE_IAP_ALLOW_UNVERIFIED=1 to skip
-// signature checks — required while testing against Xcode's local
-// StoreKit environment, whose transactions Apple's chain can't sign.
-// The server-notification endpoint never allows the bypass.
 export function decodeAppleJWS(
   jws: string,
   { allowUnverified = false } = {},
@@ -54,22 +43,37 @@ export function decodeAppleJWS(
   const header = JSON.parse(Buffer.from(h, "base64url").toString());
   const payload = JSON.parse(Buffer.from(p, "base64url").toString());
 
-  if (allowUnverified && process.env.APPLE_IAP_ALLOW_UNVERIFIED === "1") {
-    return payload;
-  }
+  const unverifiedDevelopmentReceipt =
+    allowUnverified &&
+    process.env.NODE_ENV !== "production" &&
+    process.env.APPLE_IAP_ALLOW_UNVERIFIED === "1";
+  if (unverifiedDevelopmentReceipt) return payload;
 
   const chain: X509Certificate[] = (header.x5c ?? []).map(
-    (c: string) => new X509Certificate(Buffer.from(c, "base64")),
+    (certificate: string) =>
+      new X509Certificate(Buffer.from(certificate, "base64")),
   );
   if (chain.length < 2) throw new Error("missing certificate chain");
-  // Each certificate must be signed by the next one up.
+
+  const now = Date.now();
+  for (const certificate of chain) {
+    if (
+      Date.parse(certificate.validFrom) > now ||
+      Date.parse(certificate.validTo) < now
+    ) {
+      throw new Error("certificate outside validity period");
+    }
+  }
+
   for (let i = 0; i < chain.length - 1; i++) {
     if (!chain[i].verify(chain[i + 1].publicKey))
       throw new Error("broken certificate chain");
   }
+
   const root = chain[chain.length - 1];
-  if (!root.subject.includes("Apple Root CA"))
-    throw new Error("chain does not end at Apple");
+  if (!root.verify(root.publicKey) || !root.subject.includes("Apple Root CA"))
+    throw new Error("chain does not end at an Apple root");
+
   const ok = cryptoVerify(
     "sha256",
     Buffer.from(`${h}.${p}`),
