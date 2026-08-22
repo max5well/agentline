@@ -4,7 +4,7 @@ import SwiftUI
 
 struct CallView: View {
     let agent: Agent
-    let objective: String?
+    let objective: String? = nil
     let session: any VoiceSession
 
     @Environment(\.dismiss) private var dismiss
