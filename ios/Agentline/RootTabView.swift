@@ -30,6 +30,8 @@ struct RootTabView: View {
     @State private var preparingCall: Agent?
     @State private var activeCall: PreparedCall?
     @State private var editing: AgentEditTarget?
+    @State private var completedAgentId: UUID?
+    @State private var reviewingCall: CallRecord?
     @State private var showTemplates = false
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage("hasOnboarded") private var hasOnboarded = false
@@ -55,18 +57,32 @@ struct RootTabView: View {
                 preparingCall = nil
                 Task { @MainActor in
                     await Task.yield()
+                    completedAgentId = agent.id
                     activeCall = PreparedCall(agent: agent, objective: objective)
                 }
             }
         }
         .fullScreenCover(item: $activeCall, onDismiss: {
-            Task { await store.load() }
+            Task {
+                await store.load()
+                if let agentId = completedAgentId {
+                    reviewingCall = store.records
+                        .filter { $0.agentId == agentId }
+                        .max { $0.startedAt < $1.startedAt }
+                }
+                completedAgentId = nil
+            }
         }) { prepared in
             CallView(
                 agent: prepared.agent,
                 objective: prepared.objective,
                 session: AppStore.makeSession(for: prepared.agent, objective: prepared.objective)
             )
+        }
+        .sheet(item: $reviewingCall) { record in
+            NavigationStack {
+                CallSummaryView(record: record, agent: store.agent(for: record))
+            }
         }
         .sheet(item: $editing) { target in
             AgentEditorView(agent: target.agent, records: store.records) { store.save($0) }
@@ -90,6 +106,7 @@ struct RootTabView: View {
             // Siri / App Intents: "Call Maya" (#27).
             guard let id = note.object as? UUID,
                   let agent = store.agents.first(where: { $0.id == id }) else { return }
+            completedAgentId = agent.id
             activeCall = PreparedCall(agent: agent, objective: nil)
         }
         .preferredColorScheme(AppearanceMode(rawValue: appearance)?.colorScheme ?? nil)
@@ -103,6 +120,7 @@ struct RootTabView: View {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(0.4))
                 if let agent = store.agents.first {
+                    completedAgentId = agent.id
                     activeCall = PreparedCall(agent: agent, objective: nil)
                 }
             }
