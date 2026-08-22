@@ -33,7 +33,7 @@ const ALLOWED_MODELS_BY_TIER: Record<string, Set<string>> = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildInstructions(agent: any, memory: string): string {
+function buildInstructions(agent: any, memory: string, objective: string): string {
   const style = agent.voice_style
     ? `\n\nVoice and delivery: ${agent.voice_style}`
     : "";
@@ -51,7 +51,10 @@ function buildInstructions(agent: any, memory: string): string {
     languages.length > 1
       ? `Always answer in ${languages[0]} by default; you may switch your answers between ${languages.join(", ")} if Max explicitly asks or clearly switches, but answer in no other languages. Max may speak to you in any language — always understand him`
       : `Always answer in ${languages[0] ?? "English"}, no matter which language Max speaks to you in — he may use any language and you must understand him, but your replies stay in ${languages[0] ?? "English"} unless your persona explicitly requires another language`;
-  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
+  const objectiveRule = objective
+    ? `\n\nCurrent call objective: ${objective}. Help Max achieve it, periodically keep the conversation on track, and close with a concise recap and next step.`
+    : "";
+  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${objectiveRule}${memory}`;
 }
 
 // Mints a short-lived client credential for one call (ADR-3): an OpenAI
@@ -62,9 +65,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { agentId } = await req.json();
+  const { agentId, objective: rawObjective } = await req.json();
   if (!agentId)
     return NextResponse.json({ error: "agentId required" }, { status: 400 });
+
+  const objective =
+    typeof rawObjective === "string"
+      ? rawObjective.trim().slice(0, 500)
+      : "";
 
   const { data: agent, error } = await supabase()
     .from("agents")
@@ -149,7 +157,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const instructions = buildInstructions(agent, memory);
+  const instructions = buildInstructions(agent, memory, objective);
   // Keep the Fast tier available when Gemini is not configured.
   if (isGemini && !process.env.GEMINI_API_KEY) {
     console.warn(`GEMINI_API_KEY not set, falling back to ${OPENAI_FAST}`);
