@@ -62,6 +62,15 @@ export async function POST(req: NextRequest) {
   if (body.avatar_url !== undefined) row.avatar_url = body.avatar_url;
   if (body.color !== undefined) row.color = body.color;
   if (body.model !== undefined) row.model = body.model;
+  if (Array.isArray(body.vocabulary)) {
+    row.vocabulary = body.vocabulary
+      .filter((term: unknown) => typeof term === "string")
+      .map((term: string) => term.trim().slice(0, 100))
+      .filter(Boolean)
+      .slice(0, 100);
+  }
+  if (body.web_grounding_enabled !== undefined)
+    row.web_grounding_enabled = Boolean(body.web_grounding_enabled);
 
   const { data, error } = await supabase()
     .from("agents")
