@@ -11,45 +11,36 @@ Maximize commute and walking time with natural, low-latency spoken conversations
 ```
 iPhone app (SwiftUI + CallKit + WebRTC)
         │
-        ├── WebRTC ──────────► OpenAI Realtime (gpt-realtime)      [tier: fast/big]
-        ├── WebRTC/WS ───────► Gemini Live                          [tier: fast, later]
-        ├── audio stream ────► PersonaPlex 7B on Mac Studio (MLX)   [tier: local/free, later]
-        │
+        ├── WebRTC ──────────► OpenAI Realtime (gpt-realtime)
+        ├── WebRTC/WS ───────► Gemini Live
         └── HTTPS ───────────► backend (Next.js on Vercel)
-                                  ├── mints ephemeral provider tokens
-                                  ├── agent contacts CRUD
-                                  └── call records (transcript, summary)
+                                  ├── ephemeral provider tokens
+                                  ├── authenticated agent/call APIs
+                                  └── summaries, memory and handoffs
                                           │
                                           ▼
                                       Supabase (Postgres)
 ```
 
-Three "brain" tiers, selectable per agent contact:
-
-| Tier  | Backend                                        | Trade-off                                       |
-| ----- | ---------------------------------------------- | ----------------------------------------------- |
-| local | PersonaPlex 7B on Mac Studio via Tailscale     | most natural turn-taking, shallow knowledge, $0 |
-| fast  | gpt-realtime-mini / Gemini Flash Live          | casual topics, ~$4–6/hr                         |
-| big   | pipeline STT → frontier LLM (OpenRouter) → TTS | deepest reasoning, +~200ms latency              |
-
-MVP ships with the `fast`/`big` OpenAI Realtime path only; the provider interface is designed for all three from day one.
+The iOS app uses a provider abstraction so realtime engines can evolve without coupling the UI to one vendor.
 
 ## Repo layout
 
-- `backend/` — Next.js API (Vercel): token minting, contacts, call records
+- `backend/` — Next.js API: authentication, provider tokens, agents, calls, billing and handoffs
 - `supabase/` — database migrations
-- `ios/` — SwiftUI app (requires Xcode)
-- `docs/` — architecture decisions
+- `ios/` — native SwiftUI app (requires Xcode)
+- `docs/` — architecture, design, production and product decisions
 
-## Status
+## Current status
 
-- [x] Backend scaffold: ephemeral token endpoint, Supabase schema
-- [x] Final design screens: [agentline-design/screens](https://github.com/max5well/agentline-design)
-- [x] iOS source skeleton: theme, models, VoiceSession protocol, mock session, contacts + call views
-- [x] All UI screens against MockVoiceSession: agent editor, call history, post-call summary, settings/tools — verified in simulator
-- [x] OpenAIRealtimeSession (WebRTC) + CallKit — compiles, untested until backend is live
-- [ ] End-to-end realtime call on device (blocked on backend deploy)
-- [x] Backend live on Vercel (`agentline-chi.vercel.app`) — agents, token minting, call records verified against Supabase + OpenAI
-- [ ] Post-call summary worker
-- [ ] Handoff fan-out (Hermes / OpenClaw / Claude via MCP)
-- [ ] PersonaPlex local tier
+The core app, backend, multi-user auth, OpenAI/Gemini sessions, call history,
+summaries, memory, integrations, and StoreKit flows are implemented. Physical
+device end-to-end reliability, server-authoritative billing, durable background
+processing, security controls, legal/account controls, and operational
+observability remain release blockers.
+
+Before deploying or distributing the app, read:
+
+- [Production readiness](docs/PRODUCTION_READINESS.md)
+- [Product strategy](docs/PRODUCT_STRATEGY.md)
+- [Architecture decisions](docs/ARCHITECTURE.md)
