@@ -11,8 +11,8 @@ Maximize commute and walking time with natural, low-latency spoken conversations
 ```
 iPhone app (SwiftUI + CallKit + WebRTC)
         │
-        ├── WebRTC ──────────► OpenAI Realtime (gpt-realtime)
-        ├── WebRTC/WS ───────► Gemini Live
+        ├── WebRTC ──────────► OpenAI Realtime 2.1 / 2.1 Mini
+        ├── WebRTC/WS ───────► Gemini 3.1 Flash Live (2.5 rollback)
         └── HTTPS ───────────► backend (Next.js on Vercel)
                                   ├── ephemeral provider tokens
                                   ├── authenticated agent/call APIs
