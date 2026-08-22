@@ -9,7 +9,7 @@ struct ModelPickerView: View {
     var body: some View {
         List {
             tierSection(.local, header: "Home · free")
-            tierSection(.fast, header: "Fast · ~€0.05–0.07/min")
+            tierSection(.fast, header: "Fast · estimated €0.10/min")
             Section {
                 ForEach(ModelCatalog.all.filter { $0.tier == .big }, content: row)
                 HStack {
@@ -21,7 +21,7 @@ struct ModelPickerView: View {
                 }
                 .foregroundStyle(.secondary)
             } header: {
-                Text("Big brain · ~€0.20/min")
+                Text("Big brain · estimated €0.40/min")
             } footer: {
                 Text("Faster models feel more natural; bigger models think harder. Estimated cost shows live during every call.")
             }
@@ -70,8 +70,8 @@ struct ModelPickerView: View {
         if let model { return model == option.id }
         // No explicit override: the tier's default is selected.
         switch tier {
-        case .local, .fast: return option.id == "gpt-realtime-mini"
-        case .big: return option.id == "gpt-realtime"
+        case .local, .fast: return option.id == "gemini-3.1-flash-live-preview"
+        case .big: return option.id == "gpt-realtime-2.1"
         }
     }
 }
