@@ -32,6 +32,8 @@ targets:
         UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
         NSCameraUsageDescription: agentline uses the camera to take agent avatar photos.
+        NSRemindersFullAccessUsageDescription: agentline adds action items to Reminders only when you ask.
+        NSCalendarsFullAccessUsageDescription: agentline creates calendar drafts from action items only when you ask.
         NSSupportsLiveActivities: true
         # Google SSO returns the Supabase session via this scheme (ADR-6).
         CFBundleURLTypes:
