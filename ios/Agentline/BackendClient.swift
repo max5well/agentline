@@ -277,7 +277,11 @@ struct BackendClient {
         return try Self.decoder.decode(RealtimeToken.self, from: data)
     }
 
-    func saveCall(agentId: UUID, provider: String, model: String?, startedAt: Date, endedAt: Date, transcript: [TranscriptEntry], costCents: Int?) async throws {
+    func saveCall(
+        agentId: UUID, provider: String, model: String?,
+        startedAt: Date, endedAt: Date, transcript: [TranscriptEntry],
+        costCents: Int?, objective: String?
+    ) async throws {
         struct Body: Encodable {
             let agentId: UUID
             let provider: String
@@ -286,10 +290,32 @@ struct BackendClient {
             let endedAt: Date
             let transcript: [TranscriptEntry]
             let costCents: Int?
+            let objective: String?
         }
         _ = try await request(
             "/api/calls", method: "POST",
-            body: Body(agentId: agentId, provider: provider, model: model, startedAt: startedAt, endedAt: endedAt, transcript: transcript, costCents: costCents)
+            body: Body(
+                agentId: agentId, provider: provider, model: model,
+                startedAt: startedAt, endedAt: endedAt,
+                transcript: transcript, costCents: costCents,
+                objective: objective
+            )
+        )
+    }
+
+    func updateCall(
+        id: UUID,
+        transcript: [TranscriptEntry]? = nil,
+        feedback: CallFeedback? = nil
+    ) async throws {
+        struct Body: Encodable {
+            let id: UUID
+            let transcript: [TranscriptEntry]?
+            let feedback: CallFeedback?
+        }
+        _ = try await request(
+            "/api/calls", method: "PATCH",
+            body: Body(id: id, transcript: transcript, feedback: feedback)
         )
     }
 
