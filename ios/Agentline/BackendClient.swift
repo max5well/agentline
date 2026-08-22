@@ -360,6 +360,19 @@ struct BackendClient {
         _ = try await request("/api/auth/sessions", method: "DELETE")
     }
 
+    func completePasswordReset(accessToken: String, newPassword: String) async throws {
+        struct Body: Encodable { let password: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/password", method: "PATCH",
+            body: Body(password: newPassword), bearer: accessToken
+        )
+        guard (200..<300).contains(status) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Password update failed")
+        }
+    }
+
     // Reports StoreKit transactions (signed JWS); the backend sets the
     // plan and tops up credit. fullSync = complete entitlement snapshot,
     // where a missing subscription means it lapsed.
