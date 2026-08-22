@@ -156,9 +156,28 @@ struct BackendClient {
         return try Self.decoder.decode(SessionResponse.self, from: data).session
     }
 
-    func signUp(email: String, password: String) async throws -> AuthSession {
+    enum SignupResult {
+        case session(AuthSession)
+        case confirmationRequired(String)
+    }
+
+    func signUp(email: String, password: String) async throws -> SignupResult {
         struct Body: Encodable { let email, password: String }
-        return try await authRequest("/api/auth/signup", body: Body(email: email, password: password))
+        struct Pending: Codable { let confirmationRequired: Bool; let email: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/signup", method: "POST",
+            body: Body(email: email, password: password), bearer: nil
+        )
+        if status == 202, let pending = try? Self.decoder.decode(Pending.self, from: data) {
+            return .confirmationRequired(pending.email)
+        }
+        guard (200..<300).contains(status),
+              let response = try? Self.decoder.decode(SessionResponse.self, from: data) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Sign up failed")
+        }
+        return .session(response.session)
     }
 
     func logIn(email: String, password: String) async throws -> AuthSession {
@@ -324,10 +343,21 @@ struct BackendClient {
         return try Self.decoder.decode(UsageReport.self, from: data)
     }
 
-    func addTestCredit() async throws -> Int {
-        struct Response: Codable { let creditCents: Int }
-        let data = try await request("/api/usage", method: "POST")
-        return try Self.decoder.decode(Response.self, from: data).creditCents
+    func requestPasswordReset(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/password-reset", method: "POST",
+            body: Body(email: email), bearer: nil
+        )
+        guard (200..<300).contains(status) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Password reset failed")
+        }
+    }
+
+    func signOutAllDevices() async throws {
+        _ = try await request("/api/auth/sessions", method: "DELETE")
     }
 
     // Reports StoreKit transactions (signed JWS); the backend sets the
