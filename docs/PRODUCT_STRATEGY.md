@@ -110,3 +110,19 @@ proven. Target gross margin above 60% before scaling paid acquisition.
 
 Do not broadly launch until 30–50 external users demonstrate reliable calls and
 at least 30% complete a second meaningful call within seven days.
+
+
+## Committed experience features
+
+- Continue the last conversation on every agent.
+- Optional pre-call objective.
+- Recurring call routines.
+- Explicit Apple Reminders and Calendar action export.
+- Post-call latency, voice, accuracy, and usefulness feedback.
+- Correctable transcript sections with server-side re-summarization.
+- Per-agent vocabulary and pronunciation guidance.
+- Web-grounded live answers with audible source and publication-date attribution.
+- Usage and spend warning before high-cost calls.
+- Verified email signup, password reset, and session revocation.
+- Persistent transcript, summary, objective, action items, and quality feedback.
+- Privacy-controlled email/message and Markdown file sharing.
