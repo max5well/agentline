@@ -54,7 +54,16 @@ function buildInstructions(agent: any, memory: string, objective: string): strin
   const objectiveRule = objective
     ? `\n\nCurrent call objective: ${objective}. Help Max achieve it, periodically keep the conversation on track, and close with a concise recap and next step.`
     : "";
-  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${objectiveRule}${memory}`;
+  const vocabulary = Array.isArray(agent.vocabulary)
+    ? agent.vocabulary.filter((term: unknown) => typeof term === "string").slice(0, 100)
+    : [];
+  const vocabularyRule = vocabulary.length
+    ? `\n\nReference vocabulary and pronunciations: ${vocabulary.join("; ")}. Preserve these spellings and pronunciations.`
+    : "";
+  const groundingRule = agent.web_grounding_enabled
+    ? "\n\nFor claims that may have changed, use web search before answering. In the spoken answer, name the source and publication date naturally. Distinguish verified facts from inference and say when current information could not be confirmed."
+    : "";
+  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${objectiveRule}${vocabularyRule}${groundingRule}${memory}`;
 }
 
 // Mints a short-lived client credential for one call (ADR-3): an OpenAI
@@ -86,9 +95,11 @@ export async function POST(req: NextRequest) {
   const requestedModel = typeof agent.model === "string" ? agent.model : "";
   const allowedModels =
     ALLOWED_MODELS_BY_TIER[agent.tier] ?? ALLOWED_MODELS_BY_TIER.fast;
-  const model = allowedModels.has(requestedModel)
+  const selectedModel = allowedModels.has(requestedModel)
     ? requestedModel
     : tierModel;
+  // Gemini Live currently provides server-side Google Search grounding.
+  const model = agent.web_grounding_enabled ? configuredGemini : selectedModel;
   const isGemini = model.startsWith("gemini");
 
   // Memory: inject summaries of the last calls with this agent so it can
