@@ -28,5 +28,8 @@ export async function POST(req: NextRequest) {
       email: data.user?.email ?? email,
     }, { status: 202 });
   }
+  if (!data.user) {
+    return NextResponse.json({ error: "signup returned no user" }, { status: 500 });
+  }
   return sessionResponse(data.session, data.user);
 }
