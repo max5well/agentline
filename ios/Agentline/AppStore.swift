@@ -32,8 +32,9 @@ final class AppStore {
     // the client and backend aligned when Fast uses the OpenAI mini fallback.
     static func makeSession(for agent: Agent, objective: String? = nil) -> any VoiceSession {
         guard let backend = backendIfConfigured() else { return MockVoiceSession() }
-        let usesOpenAI = agent.model?.starts(with: "gpt-realtime") == true
-            || (agent.model == nil && agent.tier == .big)
+        let usesOpenAI = agent.webGroundingEnabled != true
+            && (agent.model?.starts(with: "gpt-realtime") == true
+                || (agent.model == nil && agent.tier == .big))
         return usesOpenAI
             ? OpenAIRealtimeSession(backend: backend, objective: objective)
             : GeminiLiveSession(backend: backend, objective: objective)
