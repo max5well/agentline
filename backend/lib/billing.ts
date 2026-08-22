@@ -40,9 +40,19 @@ export const PLAN_QUOTAS: Record<
 
 export function classOf(model: string | null, provider?: string): TierClass {
   if (model === "personaplex-7b") return "local";
-  if (model === "gpt-realtime") return "big";
-  if (model?.startsWith("gemini") || model === "gpt-realtime-mini")
+  if (
+    model?.startsWith("gemini") ||
+    model === "gpt-realtime-mini" ||
+    model === "gpt-realtime-2.1-mini"
+  )
     return "fast";
+  if (
+    model === "gpt-realtime" ||
+    model === "gpt-realtime-1.5" ||
+    model === "gpt-realtime-2" ||
+    model === "gpt-realtime-2.1"
+  )
+    return "big";
   // Legacy rows without a model column: infer from provider.
   if (provider === "gemini-live") return "fast";
   return "big";
