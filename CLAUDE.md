@@ -21,4 +21,4 @@ Personal project of Max (max5well). iPhone app for real-time voice calls with co
 
 - Conventional commits, no ticket IDs
 - English for code and docs
-- Backend endpoints authenticated with `x-app-secret` header (personal app, single user)
+- Backend endpoints require a verified Supabase bearer token and scope every query to that user. Never add an application-wide authentication bypass.
