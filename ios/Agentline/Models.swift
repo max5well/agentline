@@ -27,6 +27,10 @@ struct Agent: Identifiable, Codable, Hashable {
     /// Avatar background color name (AgentPalette); nil = derived from id.
     var color: String? = nil
     var memoryEnabled: Bool
+    /// User-provided spellings and pronunciations for names and specialist terms.
+    var vocabulary: [String]? = nil
+    /// Route current-information calls through a grounded provider.
+    var webGroundingEnabled: Bool? = false
 
     /// Comma-separated list in `language`; first entry is the default.
     var languages: [String] {
@@ -42,6 +46,8 @@ struct Agent: Identifiable, Codable, Hashable {
         case memoryFile = "memory_file"
         case avatarUrl = "avatar_url"
         case memoryEnabled = "memory_enabled"
+        case vocabulary
+        case webGroundingEnabled = "web_grounding_enabled"
     }
 }
 
@@ -100,6 +106,13 @@ struct TranscriptEntry: Codable, Hashable {
     let t: TimeInterval // seconds since call start
 }
 
+struct CallFeedback: Codable, Hashable {
+    var latency: Int
+    var voice: Int
+    var accuracy: Int
+    var usefulness: Int
+}
+
 struct CallRecord: Identifiable, Codable, Hashable {
     let id: UUID
     let agentId: UUID
@@ -110,9 +123,11 @@ struct CallRecord: Identifiable, Codable, Hashable {
     let summary: String?
     let intents: [String]?
     let costCents: Int?
+    let objective: String?
+    let feedback: CallFeedback?
 
     enum CodingKeys: String, CodingKey {
-        case id, provider, transcript, summary, intents
+        case id, provider, transcript, summary, intents, objective, feedback
         case agentId = "agent_id"
         case startedAt = "started_at"
         case endedAt = "ended_at"
