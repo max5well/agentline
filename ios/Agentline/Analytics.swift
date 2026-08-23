@@ -6,12 +6,24 @@ import PostHog
 // Events answer the admin KPIs: activation funnel, engagement, product
 // mix. No transcript content or persona text is ever captured.
 enum Analytics {
-    // TODO(Max): paste the PostHog project API key (phc_…) once the
-    // PostHog project exists, and pick the matching host below.
-    private static let apiKey = ""
-    private static let host = "https://eu.i.posthog.com"
+    // Local builds can set POSTHOG_API_KEY and POSTHOG_HOST in the Xcode
+    // scheme. Release builds can provide the same values through Info.plist.
+    // The project key is a public ingestion key; never put a personal API key here.
+    private static var apiKey: String {
+        ProcessInfo.processInfo.environment["POSTHOG_API_KEY"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "PostHogAPIKey") as? String
+            ?? ""
+    }
 
-    static var enabled: Bool { !apiKey.isEmpty }
+    private static var host: String {
+        ProcessInfo.processInfo.environment["POSTHOG_HOST"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "PostHogHost") as? String
+            ?? "https://eu.i.posthog.com"
+    }
+
+    static var enabled: Bool {
+        apiKey.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("phc_")
+    }
 
     static func configure() {
         guard enabled else { return }
