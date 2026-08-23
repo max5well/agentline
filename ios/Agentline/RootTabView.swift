@@ -21,9 +21,10 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
-// 3-tab information architecture (DESIGN-SPEC §2).
+// Two-task information architecture: configure/start agents, then review calls.
+// Settings stays available from the Agents toolbar without competing for a tab.
 struct RootTabView: View {
-    enum Tab { case agents, recents, settings }
+    enum Tab { case agents, calls }
 
     @State private var store = AppStore()
     @State private var tab: Tab = .agents
@@ -33,21 +34,29 @@ struct RootTabView: View {
     @State private var completedAgentId: UUID?
     @State private var reviewingCall: CallRecord?
     @State private var showTemplates = false
+    @State private var showSettings = false
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $tab) {
-            AgentsListView(store: store, preparingCall: $preparingCall, editing: $editing, showTemplates: $showTemplates)
-                .tabItem { Label("Agents", systemImage: "person.2") }
-                .tag(Tab.agents)
+            AgentsListView(
+                store: store,
+                preparingCall: $preparingCall,
+                editing: $editing,
+                showTemplates: $showTemplates,
+                showSettings: $showSettings
+            )
+            .tabItem { Label("Agents", systemImage: "person.2") }
+            .tag(Tab.agents)
+
             RecentsView(store: store)
-                .tabItem { Label("Recents", systemImage: "clock") }
-                .tag(Tab.recents)
+                .tabItem { Label("Calls", systemImage: "clock.arrow.circlepath") }
+                .tag(Tab.calls)
+        }
+        .sheet(isPresented: $showSettings) {
             SettingsView(store: store)
-                .tabItem { Label("Settings", systemImage: "gear") }
-                .tag(Tab.settings)
         }
         .sheet(item: $preparingCall) { agent in
             CallPreparationView(
@@ -96,14 +105,12 @@ struct RootTabView: View {
         .task { await store.load() }
         .onAppear(perform: handleLaunchArguments)
         .onAppear {
-            // First run only; never during UI-test hooks.
             if !hasOnboarded && !ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-") }) {
                 showOnboarding = true
                 hasOnboarded = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .startCallIntent)) { note in
-            // Siri / App Intents: "Call Maya" (#27).
             guard let id = note.object as? UUID,
                   let agent = store.agents.first(where: { $0.id == id }) else { return }
             completedAgentId = agent.id
@@ -112,11 +119,9 @@ struct RootTabView: View {
         .preferredColorScheme(AppearanceMode(rawValue: appearance)?.colorScheme ?? nil)
     }
 
-    // UI-test hooks: jump straight to a screen so simctl can screenshot it.
     private func handleLaunchArguments() {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-autocall") {
-            // Presenting a cover during the initial transition gets dropped.
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(0.4))
                 if let agent = store.agents.first {
@@ -124,10 +129,10 @@ struct RootTabView: View {
                     activeCall = PreparedCall(agent: agent, objective: nil)
                 }
             }
-        } else if args.contains("-screen-history") {
-            tab = .recents
+        } else if args.contains("-screen-history") || args.contains("-screen-calls") {
+            tab = .calls
         } else if args.contains("-screen-settings") {
-            tab = .settings
+            showSettings = true
         } else if args.contains("-screen-editor") {
             editing = AgentEditTarget(agent: store.agents.first)
         } else if args.contains("-screen-templates") {
@@ -136,7 +141,6 @@ struct RootTabView: View {
     }
 }
 
-// Distinguishes "new agent" from "edit agent" for the sheet item.
 struct AgentEditTarget: Identifiable {
     let id = UUID()
     let agent: Agent?
