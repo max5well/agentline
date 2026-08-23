@@ -19,6 +19,9 @@ struct AuthView: View {
     @State private var recoverySession: AuthSession?
 
     private var backend: BackendClient { BackendClient(config: BackendConfig.current) }
+    private var appleSignInEnabled: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "AgentlineAppleSignInEnabled") as? Bool == true
+    }
 
     var body: some View {
         ScrollView {
@@ -144,7 +147,8 @@ struct AuthView: View {
 
     private var ssoButtons: some View {
         VStack(spacing: 12) {
-            SignInWithAppleButton(.signIn) { request in
+            if appleSignInEnabled {
+                SignInWithAppleButton(.signIn) { request in
                 appleNonce = Self.randomNonce()
                 request.requestedScopes = [.email]
                 request.nonce = Self.sha256(appleNonce)
@@ -153,7 +157,8 @@ struct AuthView: View {
             }
             .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
 
             Button {
                 Task { await signInWithGoogle() }
@@ -306,7 +311,7 @@ struct AuthView: View {
         )
     }
 
-    static func decodeJWTClaims(_ jwt: String) -> [String: Any] {
+    nonisolated static func decodeJWTClaims(_ jwt: String) -> [String: Any] {
         let segments = jwt.split(separator: ".")
         guard segments.count >= 2 else { return [:] }
         var base64 = String(segments[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
