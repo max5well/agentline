@@ -4,7 +4,7 @@ import SwiftUI
 
 struct CallView: View {
     let agent: Agent
-    let objective: String? = nil
+    let objective: String?
     let session: any VoiceSession
 
     init(agent: Agent, objective: String? = nil, session: any VoiceSession) {
