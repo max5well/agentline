@@ -7,6 +7,12 @@ struct CallView: View {
     let objective: String? = nil
     let session: any VoiceSession
 
+    init(agent: Agent, objective: String? = nil, session: any VoiceSession) {
+        self.agent = agent
+        self.objective = objective
+        self.session = session
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var state: VoiceSessionState = .connecting
     @State private var transcript: [TranscriptEntry] = []
