@@ -28,6 +28,8 @@ targets:
       path: Agentline/Info.plist
       properties:
         CFBundleDisplayName: agentline
+        # Set true only together with the Sign in with Apple entitlement on a paid Developer team.
+        AgentlineAppleSignInEnabled: false
         UILaunchScreen: {}
         UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
