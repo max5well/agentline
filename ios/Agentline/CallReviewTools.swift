@@ -9,7 +9,7 @@ struct CallExportFile: Transferable {
     let markdown: String
 
     static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(exportedContentType: .markdown) { export in
+        FileRepresentation(exportedContentType: UTType(filenameExtension: "md") ?? .plainText) { export in
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent(export.filename)
                 .appendingPathExtension("md")
