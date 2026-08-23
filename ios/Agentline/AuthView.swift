@@ -149,14 +149,14 @@ struct AuthView: View {
         VStack(spacing: 12) {
             if appleSignInEnabled {
                 SignInWithAppleButton(.signIn) { request in
-                appleNonce = Self.randomNonce()
-                request.requestedScopes = [.email]
-                request.nonce = Self.sha256(appleNonce)
-            } onCompletion: { result in
-                Task { await handleApple(result) }
-            }
-            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-            .frame(height: 52)
+                    appleNonce = Self.randomNonce()
+                    request.requestedScopes = [.email]
+                    request.nonce = Self.sha256(appleNonce)
+                } onCompletion: { result in
+                    Task { await handleApple(result) }
+                }
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .frame(height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
