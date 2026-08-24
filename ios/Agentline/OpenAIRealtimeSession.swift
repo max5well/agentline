@@ -15,6 +15,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
 
     private let backend: BackendClient
+    private let objective: String?
     private let factory = RTCPeerConnectionFactory()
     private var peerConnection: RTCPeerConnection?
     private var dataChannel: RTCDataChannel?
@@ -27,8 +28,9 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private var reconnectTask: Task<Void, Never>?
     private var didAttemptReconnect = false
 
-    init(backend: BackendClient) {
+    init(backend: BackendClient, objective: String? = nil) {
         self.backend = backend
+        self.objective = objective
         var c: AsyncStream<VoiceSessionEvent>.Continuation!
         events = AsyncStream { c = $0 }
         continuation = c
@@ -54,7 +56,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         rtcSession.useManualAudio = false
         rtcSession.lockForConfiguration()
         try? rtcSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                    options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+                                    options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
         try? rtcSession.setActive(true)
         rtcSession.unlockForConfiguration()
         #else
@@ -87,7 +89,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         #endif
 
         do {
-            let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
             modelId = token.model
             try await connect(token: token)
             if let callId { CallKitController.shared.reportConnected(callId) }
@@ -270,7 +272,7 @@ extension OpenAIRealtimeSession: RTCPeerConnectionDelegate {
             self.dataChannel = nil
             self.peerConnection = nil
             do {
-                let token = try await self.backend.mintRealtimeToken(agentId: agent.id)
+                let token = try await self.backend.mintRealtimeToken(agentId: agent.id, objective: objective)
                 try await self.connect(token: token)
                 self.continuation.yield(.state(.listening))
                 self.reconnectTask = nil

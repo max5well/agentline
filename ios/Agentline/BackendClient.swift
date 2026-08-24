@@ -156,9 +156,28 @@ struct BackendClient {
         return try Self.decoder.decode(SessionResponse.self, from: data).session
     }
 
-    func signUp(email: String, password: String) async throws -> AuthSession {
+    enum SignupResult {
+        case session(AuthSession)
+        case confirmationRequired(String)
+    }
+
+    func signUp(email: String, password: String) async throws -> SignupResult {
         struct Body: Encodable { let email, password: String }
-        return try await authRequest("/api/auth/signup", body: Body(email: email, password: password))
+        struct Pending: Codable { let confirmationRequired: Bool; let email: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/signup", method: "POST",
+            body: Body(email: email, password: password), bearer: nil
+        )
+        if status == 202, let pending = try? Self.decoder.decode(Pending.self, from: data) {
+            return .confirmationRequired(pending.email)
+        }
+        guard (200..<300).contains(status),
+              let response = try? Self.decoder.decode(SessionResponse.self, from: data) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Sign up failed")
+        }
+        return .session(response.session)
     }
 
     func logIn(email: String, password: String) async throws -> AuthSession {
@@ -268,13 +287,20 @@ struct BackendClient {
         _ = try await request("/api/calls?id=\(id.uuidString)", method: "DELETE")
     }
 
-    func mintRealtimeToken(agentId: UUID) async throws -> RealtimeToken {
-        struct Body: Encodable { let agentId: UUID }
-        let data = try await request("/api/realtime/token", method: "POST", body: Body(agentId: agentId))
+    func mintRealtimeToken(agentId: UUID, objective: String? = nil) async throws -> RealtimeToken {
+        struct Body: Encodable { let agentId: UUID; let objective: String? }
+        let data = try await request(
+            "/api/realtime/token", method: "POST",
+            body: Body(agentId: agentId, objective: objective)
+        )
         return try Self.decoder.decode(RealtimeToken.self, from: data)
     }
 
-    func saveCall(agentId: UUID, provider: String, model: String?, startedAt: Date, endedAt: Date, transcript: [TranscriptEntry], costCents: Int?) async throws {
+    func saveCall(
+        agentId: UUID, provider: String, model: String?,
+        startedAt: Date, endedAt: Date, transcript: [TranscriptEntry],
+        costCents: Int?, objective: String?
+    ) async throws {
         struct Body: Encodable {
             let agentId: UUID
             let provider: String
@@ -283,10 +309,32 @@ struct BackendClient {
             let endedAt: Date
             let transcript: [TranscriptEntry]
             let costCents: Int?
+            let objective: String?
         }
         _ = try await request(
             "/api/calls", method: "POST",
-            body: Body(agentId: agentId, provider: provider, model: model, startedAt: startedAt, endedAt: endedAt, transcript: transcript, costCents: costCents)
+            body: Body(
+                agentId: agentId, provider: provider, model: model,
+                startedAt: startedAt, endedAt: endedAt,
+                transcript: transcript, costCents: costCents,
+                objective: objective
+            )
+        )
+    }
+
+    func updateCall(
+        id: UUID,
+        transcript: [TranscriptEntry]? = nil,
+        feedback: CallFeedback? = nil
+    ) async throws {
+        struct Body: Encodable {
+            let id: UUID
+            let transcript: [TranscriptEntry]?
+            let feedback: CallFeedback?
+        }
+        _ = try await request(
+            "/api/calls", method: "PATCH",
+            body: Body(id: id, transcript: transcript, feedback: feedback)
         )
     }
 
@@ -295,10 +343,34 @@ struct BackendClient {
         return try Self.decoder.decode(UsageReport.self, from: data)
     }
 
-    func addTestCredit() async throws -> Int {
-        struct Response: Codable { let creditCents: Int }
-        let data = try await request("/api/usage", method: "POST")
-        return try Self.decoder.decode(Response.self, from: data).creditCents
+    func requestPasswordReset(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/password-reset", method: "POST",
+            body: Body(email: email), bearer: nil
+        )
+        guard (200..<300).contains(status) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Password reset failed")
+        }
+    }
+
+    func signOutAllDevices() async throws {
+        _ = try await request("/api/auth/sessions", method: "DELETE")
+    }
+
+    func completePasswordReset(accessToken: String, newPassword: String) async throws {
+        struct Body: Encodable { let password: String }
+        let (data, status) = try await bareRequest(
+            "/api/auth/password", method: "PATCH",
+            body: Body(password: newPassword), bearer: accessToken
+        )
+        guard (200..<300).contains(status) else {
+            struct Failure: Codable { let error: String }
+            let message = (try? Self.decoder.decode(Failure.self, from: data))?.error
+            throw AuthError.server(message ?? "Password update failed")
+        }
     }
 
     // Reports StoreKit transactions (signed JWS); the backend sets the

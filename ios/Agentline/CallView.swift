@@ -4,7 +4,14 @@ import SwiftUI
 
 struct CallView: View {
     let agent: Agent
+    let objective: String?
     let session: any VoiceSession
+
+    init(agent: Agent, objective: String? = nil, session: any VoiceSession) {
+        self.agent = agent
+        self.objective = objective
+        self.session = session
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var state: VoiceSessionState = .connecting
@@ -184,7 +191,8 @@ struct CallView: View {
             try? await BackendClient(config: config).saveCall(
                 agentId: agent.id, provider: session.providerId, model: session.modelId,
                 startedAt: startedAt, endedAt: .now,
-                transcript: transcript, costCents: costCents > 0 ? costCents : nil
+                transcript: transcript, costCents: costCents > 0 ? costCents : nil,
+                objective: objective
             )
         }
         dismiss()

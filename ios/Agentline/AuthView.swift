@@ -14,9 +14,14 @@ struct AuthView: View {
     @State private var creatingAccount = false
     @State private var busy = false
     @State private var errorMessage: String?
+    @State private var successMessage: String?
     @State private var appleNonce = ""
+    @State private var recoverySession: AuthSession?
 
     private var backend: BackendClient { BackendClient(config: BackendConfig.current) }
+    private var appleSignInEnabled: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "AgentlineAppleSignInEnabled") as? Bool == true
+    }
 
     var body: some View {
         ScrollView {
@@ -30,6 +35,15 @@ struct AuthView: View {
                     .padding(.bottom, 34)
 
                 emailForm
+
+                if let successMessage {
+                    Text(successMessage)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.green)
+                        .padding(.top, 14)
+                        .padding(.horizontal, 8)
+                }
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -53,6 +67,14 @@ struct AuthView: View {
                 }
                 .padding(.top, 16)
 
+                if !creatingAccount {
+                    Button("Forgot password?") {
+                        Task { await resetPassword() }
+                    }
+                    .font(.footnote)
+                    .padding(.top, 12)
+                }
+
                 divider
                     .padding(.vertical, 26)
 
@@ -65,6 +87,15 @@ struct AuthView: View {
         .background(Color(.systemGroupedBackground))
         .disabled(busy)
         .overlay { if busy { ProgressView() } }
+        .onOpenURL(perform: handleAuthCallback)
+        .sheet(isPresented: Binding(
+            get: { recoverySession != nil },
+            set: { if !$0 { recoverySession = nil } }
+        )) {
+            if let recoverySession {
+                PasswordRecoveryView(session: recoverySession)
+            }
+        }
     }
 
     private var wordmark: some View {
@@ -116,16 +147,18 @@ struct AuthView: View {
 
     private var ssoButtons: some View {
         VStack(spacing: 12) {
-            SignInWithAppleButton(.signIn) { request in
-                appleNonce = Self.randomNonce()
-                request.requestedScopes = [.email]
-                request.nonce = Self.sha256(appleNonce)
-            } onCompletion: { result in
-                Task { await handleApple(result) }
+            if appleSignInEnabled {
+                SignInWithAppleButton(.signIn) { request in
+                    appleNonce = Self.randomNonce()
+                    request.requestedScopes = [.email]
+                    request.nonce = Self.sha256(appleNonce)
+                } onCompletion: { result in
+                    Task { await handleApple(result) }
+                }
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .frame(height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-            .frame(height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button {
                 Task { await signInWithGoogle() }
@@ -151,10 +184,34 @@ struct AuthView: View {
         busy = true
         errorMessage = nil
         do {
-            let session = creatingAccount
-                ? try await backend.signUp(email: email, password: password)
-                : try await backend.logIn(email: email, password: password)
-            AuthStore.shared.signedIn(session)
+            if creatingAccount {
+                switch try await backend.signUp(email: email, password: password) {
+                case .session(let session):
+                    AuthStore.shared.signedIn(session)
+                case .confirmationRequired(let address):
+                    successMessage = "Check \(address) to verify your email, then return here to sign in."
+                    password = ""
+                }
+            } else {
+                AuthStore.shared.signedIn(try await backend.logIn(email: email, password: password))
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        busy = false
+    }
+
+
+    private func resetPassword() async {
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Enter your email first."
+            return
+        }
+        busy = true
+        errorMessage = nil
+        do {
+            try await backend.requestPasswordReset(email: email)
+            successMessage = "If that account exists, a password-reset email is on its way."
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -216,6 +273,20 @@ struct AuthView: View {
         busy = false
     }
 
+
+    private func handleAuthCallback(_ url: URL) {
+        guard let session = Self.session(fromCallback: url) else { return }
+        let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment ?? ""
+        let isRecovery = fragment
+            .split(separator: "&")
+            .contains { $0 == "type=recovery" }
+        if isRecovery {
+            recoverySession = session
+        } else {
+            AuthStore.shared.signedIn(session)
+        }
+    }
+
     // MARK: - Helpers
 
     // Supabase's implicit flow returns tokens in the URL fragment; user id
@@ -240,7 +311,7 @@ struct AuthView: View {
         )
     }
 
-    static func decodeJWTClaims(_ jwt: String) -> [String: Any] {
+    nonisolated static func decodeJWTClaims(_ jwt: String) -> [String: Any] {
         let segments = jwt.split(separator: ".")
         guard segments.count >= 2 else { return [:] }
         var base64 = String(segments[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")

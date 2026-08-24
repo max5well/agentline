@@ -28,10 +28,17 @@ targets:
       path: Agentline/Info.plist
       properties:
         CFBundleDisplayName: agentline
+        # Set true only together with the Sign in with Apple entitlement on a paid Developer team.
+        AgentlineAppleSignInEnabled: false
+        # PostHog is enabled when a phc_ project key is provided here or via the Xcode scheme.
+        PostHogAPIKey: ""
+        PostHogHost: https://eu.i.posthog.com
         UILaunchScreen: {}
         UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
         NSCameraUsageDescription: agentline uses the camera to take agent avatar photos.
+        NSRemindersFullAccessUsageDescription: agentline adds action items to Reminders only when you ask.
+        NSCalendarsFullAccessUsageDescription: agentline creates calendar drafts from action items only when you ask.
         NSSupportsLiveActivities: true
         # Google SSO returns the Supabase session via this scheme (ADR-6).
         CFBundleURLTypes:

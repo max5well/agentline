@@ -24,7 +24,7 @@ Implementations, in build order:
 3. `PersonaPlexSession` — audio streaming to Mac Studio (MLX port) over Tailscale. Free local tier.
 4. `PipelineSession` — LiveKit room with server agent: Deepgram STT → OpenRouter LLM → Cartesia TTS. Big-brain tier, only way to get Claude as the brain.
 
-The agent's tier picks the provider, identically in the app's session factory and the backend's `MODEL_BY_TIER`: `big` → OpenAI Realtime, `fast` and (until PersonaPlex exists) `local` → Gemini Live. A per-agent `model` override is honored only within the tier's provider family, so the two sides can never disagree. Agent voices are stored as OpenAI ids and mapped to Gemini prebuilt voices server-side.
+The default lineup is `big` → `gpt-realtime-2.1`, `fast` and (until PersonaPlex exists) `local` → `gemini-3.1-flash-live-preview`. Fast may explicitly use `gpt-realtime-2.1-mini` as the OpenAI budget fallback. The backend validates model overrides against the tier allowlist and the iOS session factory routes by the resolved provider family. Set `GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025` for an operational rollback. Agent voices are stored as provider-neutral selections and mapped server-side.
 
 Rationale: no realtime S2S aggregator exists (OpenRouter is text/TTS/STT only), so multi-provider means owning the abstraction ourselves.
 
@@ -32,7 +32,7 @@ Rationale: no realtime S2S aggregator exists (OpenRouter is text/TTS/STT only), 
 
 OpenAI Realtime supports short-lived client secrets (`POST /v1/realtime/client_secrets`). The backend mints one per call with the agent's persona baked into the session config. The iOS app connects WebRTC directly to OpenAI with that secret — backend is out of the audio path entirely (no latency added, no audio infra to run).
 
-Gemini Live works the same way with ephemeral tokens (`v1alpha auth_tokens:create`), with one difference: the session config can't be baked into the token by our flow, so the backend returns `instructions` and `voice` alongside the token and the app sends them in its websocket setup message. The config still only travels over the `x-app-secret`-authenticated endpoint; the raw `GEMINI_API_KEY` never leaves the backend. While `GEMINI_API_KEY` is unset, Gemini tiers fall back to the OpenAI mini flow.
+Gemini Live works the same way with ephemeral tokens (`v1alpha auth_tokens:create`), with one difference: the session config can't be baked into the token by our flow, so the backend returns `instructions` and `voice` alongside the token and the app sends them in its websocket setup message. The config travels only over a Supabase bearer-authenticated endpoint; the raw `GEMINI_API_KEY` never leaves the backend. While `GEMINI_API_KEY` is unset, Gemini tiers fall back to `gpt-realtime-2.1-mini`.
 
 ## ADR-4: Transcripts captured live, summary post-call
 

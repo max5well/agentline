@@ -61,6 +61,18 @@ struct AgentEditorView: View {
                     } label: {
                         conversationRow("brain.head.profile", "Memory & Context", draft.memoryEnabled ? "On" : "Off")
                     }
+                    NavigationLink {
+                        VocabularyGroundingView(
+                            vocabulary: $draft.vocabulary,
+                            webGroundingEnabled: $draft.webGroundingEnabled
+                        )
+                    } label: {
+                        conversationRow(
+                            "text.book.closed",
+                            "Knowledge & Sources",
+                            draft.webGroundingEnabled == true ? "Web on" : "\(draft.vocabulary?.count ?? 0) terms"
+                        )
+                    }
                 }
             }
             .navigationTitle(isNew ? "New Agent" : "Edit Agent")

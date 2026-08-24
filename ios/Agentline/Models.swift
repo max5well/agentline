@@ -27,6 +27,10 @@ struct Agent: Identifiable, Codable, Hashable {
     /// Avatar background color name (AgentPalette); nil = derived from id.
     var color: String? = nil
     var memoryEnabled: Bool
+    /// User-provided spellings and pronunciations for names and specialist terms.
+    var vocabulary: [String]? = nil
+    /// Route current-information calls through a grounded provider.
+    var webGroundingEnabled: Bool? = false
 
     /// Comma-separated list in `language`; first entry is the default.
     var languages: [String] {
@@ -42,6 +46,8 @@ struct Agent: Identifiable, Codable, Hashable {
         case memoryFile = "memory_file"
         case avatarUrl = "avatar_url"
         case memoryEnabled = "memory_enabled"
+        case vocabulary
+        case webGroundingEnabled = "web_grounding_enabled"
     }
 }
 
@@ -63,12 +69,14 @@ enum ModelCatalog {
         .init(id: "custom-local", name: "Your own model",
               blurb: "Hook up a self-hosted voice model",
               tier: .local, available: false),
-        .init(id: "gpt-realtime-mini", name: "GPT Realtime Mini",
-              blurb: "Quick and cheap, everyday topics", tier: .fast),
+        .init(id: "gemini-3.1-flash-live-preview", name: "Gemini 3.1 Flash Live",
+              blurb: "Fast, natural everyday conversations", tier: .fast),
+        .init(id: "gpt-realtime-2.1-mini", name: "GPT Realtime 2.1 Mini",
+              blurb: "Efficient OpenAI voice fallback", tier: .fast),
         .init(id: "gemini-2.5-flash-native-audio-preview-12-2025", name: "Gemini 2.5 Flash Live",
-              blurb: "Quick and cheap, everyday topics", tier: .fast),
-        .init(id: "gpt-realtime", name: "GPT Realtime",
-              blurb: "Deeper reasoning, still speech-to-speech", tier: .big),
+              blurb: "Compatibility rollback", tier: .fast, available: false),
+        .init(id: "gpt-realtime-2.1", name: "GPT Realtime 2.1",
+              blurb: "Smartest voice reasoning and tool use", tier: .big),
         .init(id: "claude-sonnet-pipeline", name: "Claude Sonnet (pipeline)",
               blurb: "Deepest reasoning · +~200ms latency",
               tier: .big, available: false),
@@ -80,8 +88,8 @@ enum ModelCatalog {
         }
         // Tier default mirrors the backend's MODEL_BY_TIER.
         switch agent.tier {
-        case .local, .fast: return all.first { $0.id == "gpt-realtime-mini" }
-        case .big: return all.first { $0.id == "gpt-realtime" }
+        case .local, .fast: return all.first { $0.id == "gemini-3.1-flash-live-preview" }
+        case .big: return all.first { $0.id == "gpt-realtime-2.1" }
         }
     }
 }
@@ -98,6 +106,13 @@ struct TranscriptEntry: Codable, Hashable {
     let t: TimeInterval // seconds since call start
 }
 
+struct CallFeedback: Codable, Hashable {
+    var latency: Int
+    var voice: Int
+    var accuracy: Int
+    var usefulness: Int
+}
+
 struct CallRecord: Identifiable, Codable, Hashable {
     let id: UUID
     let agentId: UUID
@@ -108,9 +123,11 @@ struct CallRecord: Identifiable, Codable, Hashable {
     let summary: String?
     let intents: [String]?
     let costCents: Int?
+    let objective: String? = nil
+    let feedback: CallFeedback? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, provider, transcript, summary, intents
+        case id, provider, transcript, summary, intents, objective, feedback
         case agentId = "agent_id"
         case startedAt = "started_at"
         case endedAt = "ended_at"

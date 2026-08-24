@@ -1,10 +1,9 @@
 import SwiftUI
 
-// Recents tab (DESIGN-SPEC §3.2): day sections, Edit/delete, ⓘ rows
-// into the call summary.
 struct RecentsView: View {
     @Bindable var store: AppStore
     @State private var query = ""
+    @State private var selectedAgentId: UUID?
 
     var body: some View {
         NavigationStack {
@@ -24,9 +23,32 @@ struct RecentsView: View {
             }
             .listStyle(.insetGrouped)
             .searchable(text: $query, prompt: "Search calls and transcripts")
-            .navigationTitle("Recents")
+            .navigationTitle("Calls")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            selectedAgentId = nil
+                        } label: {
+                            if selectedAgentId == nil { Label("All Agents", systemImage: "checkmark") }
+                            else { Text("All Agents") }
+                        }
+                        Divider()
+                        ForEach(store.agents) { agent in
+                            Button {
+                                selectedAgentId = agent.id
+                            } label: {
+                                if selectedAgentId == agent.id { Label(agent.name, systemImage: "checkmark") }
+                                else { Text(agent.name) }
+                            }
+                        }
+                    } label: {
+                        Label(agentFilterLabel, systemImage: "line.3.horizontal.decrease.circle")
+                            .labelStyle(.iconOnly)
+                    }
+                    .accessibilityLabel("Filter calls by agent")
+                }
             }
             .navigationDestination(for: CallRecord.self) { record in
                 CallSummaryView(record: record, agent: store.agent(for: record))
@@ -39,10 +61,19 @@ struct RecentsView: View {
                         description: Text("Calls show up here after you hang up.")
                     )
                 } else if filtered.isEmpty {
-                    ContentUnavailableView.search(text: query)
+                    ContentUnavailableView(
+                        "No matching calls",
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        description: Text("Try another agent or search term.")
+                    )
                 }
             }
         }
+    }
+
+    private var agentFilterLabel: String {
+        guard let selectedAgentId else { return "All Agents" }
+        return store.agents.first { $0.id == selectedAgentId }?.name ?? "Agent"
     }
 
     private func delete(_ records: [CallRecord]) {
@@ -52,15 +83,15 @@ struct RecentsView: View {
         }
     }
 
-    // Searches agent names, summaries, action items, and the full
-    // transcript text ("what did Maya say about…").
     private var filtered: [CallRecord] {
-        guard !query.isEmpty else { return store.records }
-        return store.records.filter { record in
-            store.agent(for: record).name.localizedCaseInsensitiveContains(query)
+        store.records.filter { record in
+            let matchesAgent = selectedAgentId == nil || record.agentId == selectedAgentId
+            let matchesQuery = query.isEmpty
+                || store.agent(for: record).name.localizedCaseInsensitiveContains(query)
                 || (record.summary?.localizedCaseInsensitiveContains(query) ?? false)
                 || (record.intents ?? []).contains { $0.localizedCaseInsensitiveContains(query) }
                 || record.transcript.contains { $0.text.localizedCaseInsensitiveContains(query) }
+            return matchesAgent && matchesQuery
         }
     }
 
@@ -70,18 +101,11 @@ struct RecentsView: View {
         var buckets: [(String, [CallRecord])] = []
         for record in sorted {
             let label: String
-            if calendar.isDateInToday(record.startedAt) {
-                label = "Today"
-            } else if calendar.isDateInYesterday(record.startedAt) {
-                label = "Yesterday"
-            } else {
-                label = record.startedAt.formatted(date: .abbreviated, time: .omitted)
-            }
-            if let idx = buckets.firstIndex(where: { $0.0 == label }) {
-                buckets[idx].1.append(record)
-            } else {
-                buckets.append((label, [record]))
-            }
+            if calendar.isDateInToday(record.startedAt) { label = "Today" }
+            else if calendar.isDateInYesterday(record.startedAt) { label = "Yesterday" }
+            else { label = record.startedAt.formatted(date: .abbreviated, time: .omitted) }
+            if let idx = buckets.firstIndex(where: { $0.0 == label }) { buckets[idx].1.append(record) }
+            else { buckets.append((label, [record])) }
         }
         return buckets.map { (label: $0.0, records: $0.1) }
     }
@@ -95,17 +119,12 @@ struct RecentRow: View {
         HStack(spacing: 12) {
             AgentAvatar(agent: agent, size: 38)
             VStack(alignment: .leading, spacing: 2) {
-                Text(agent.name)
-                    .font(.body.weight(.semibold))
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                Text(agent.name).font(.body.weight(.semibold))
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Text(record.startedAt.formatted(date: .omitted, time: .shortened))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(.footnote).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }

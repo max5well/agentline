@@ -9,7 +9,6 @@ struct BillingView: View {
     @Bindable var store: AppStore
     @State private var usage: UsageReport?
     @State private var iap = StoreService()
-    @State private var addingCredit = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -68,18 +67,6 @@ struct BillingView: View {
                     ForEach(iap.credits, id: \.id) { product in
                         creditRow(product)
                     }
-                    #if DEBUG
-                    Button {
-                        Task { await addCredit() }
-                    } label: {
-                        if addingCredit {
-                            ProgressView().frame(maxWidth: .infinity)
-                        } else {
-                            Text("Add €5.00 credit (debug, no purchase)")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    #endif
                     if let message = errorMessage ?? iap.errorMessage {
                         Text(message).font(.footnote).foregroundStyle(.red)
                     }
@@ -196,19 +183,6 @@ struct BillingView: View {
     private func load() async {
         guard let backend = AppStore.backendIfConfigured() else { return }
         usage = try? await backend.usage()
-    }
-
-    private func addCredit() async {
-        guard let backend = AppStore.backendIfConfigured() else { return }
-        addingCredit = true
-        errorMessage = nil
-        do {
-            _ = try await backend.addTestCredit()
-            await load()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        addingCredit = false
     }
 
     private var usageByAgent: [(agent: Agent, minutes: Double)] {

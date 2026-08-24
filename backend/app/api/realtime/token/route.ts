@@ -10,19 +10,30 @@ import {
 } from "@/lib/billing";
 import { resolveGeminiVoice, resolveOpenAIVoice } from "@/lib/voices";
 
-// Tier → model (ADR-2): fast is the cheap Gemini Live tier, big is full
-// OpenAI Realtime, local rides Gemini until PersonaPlexSession exists.
-// The provider is derived from the model name; the app derives its session
-// implementation from the tier the same way, so a per-agent model override
-// must stay within the tier's provider family (enforced below).
+const GEMINI_31 = "gemini-3.1-flash-live-preview";
+const GEMINI_25 = "gemini-2.5-flash-native-audio-preview-12-2025";
+const OPENAI_FAST = "gpt-realtime-2.1-mini";
+const OPENAI_SMART = "gpt-realtime-2.1";
+
+// Gemini 3.1 is the primary Fast model. Set GEMINI_LIVE_MODEL to the 2.5
+// model id for an instant rollback without shipping a new iOS build.
+const configuredGemini =
+  process.env.GEMINI_LIVE_MODEL === GEMINI_25 ? GEMINI_25 : GEMINI_31;
+
 const MODEL_BY_TIER: Record<string, string> = {
-  local: "gemini-2.5-flash-native-audio-preview-12-2025",
-  fast: "gemini-2.5-flash-native-audio-preview-12-2025",
-  big: "gpt-realtime",
+  local: configuredGemini,
+  fast: configuredGemini,
+  big: OPENAI_SMART,
+};
+
+const ALLOWED_MODELS_BY_TIER: Record<string, Set<string>> = {
+  local: new Set([GEMINI_31, GEMINI_25]),
+  fast: new Set([GEMINI_31, GEMINI_25, OPENAI_FAST]),
+  big: new Set([OPENAI_SMART]),
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildInstructions(agent: any, memory: string): string {
+function buildInstructions(agent: any, memory: string, objective: string): string {
   const style = agent.voice_style
     ? `\n\nVoice and delivery: ${agent.voice_style}`
     : "";
@@ -40,7 +51,19 @@ function buildInstructions(agent: any, memory: string): string {
     languages.length > 1
       ? `Always answer in ${languages[0]} by default; you may switch your answers between ${languages.join(", ")} if Max explicitly asks or clearly switches, but answer in no other languages. Max may speak to you in any language — always understand him`
       : `Always answer in ${languages[0] ?? "English"}, no matter which language Max speaks to you in — he may use any language and you must understand him, but your replies stay in ${languages[0] ?? "English"} unless your persona explicitly requires another language`;
-  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${memory}`;
+  const objectiveRule = objective
+    ? `\n\nCurrent call objective: ${objective}. Help Max achieve it, periodically keep the conversation on track, and close with a concise recap and next step.`
+    : "";
+  const vocabulary = Array.isArray(agent.vocabulary)
+    ? agent.vocabulary.filter((term: unknown) => typeof term === "string").slice(0, 100)
+    : [];
+  const vocabularyRule = vocabulary.length
+    ? `\n\nReference vocabulary and pronunciations: ${vocabulary.join("; ")}. Preserve these spellings and pronunciations.`
+    : "";
+  const groundingRule = agent.web_grounding_enabled
+    ? "\n\nFor claims that may have changed, use web search before answering. In the spoken answer, name the source and publication date naturally. Distinguish verified facts from inference and say when current information could not be confirmed."
+    : "";
+  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${objectiveRule}${vocabularyRule}${groundingRule}${memory}`;
 }
 
 // Mints a short-lived client credential for one call (ADR-3): an OpenAI
@@ -51,9 +74,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { agentId } = await req.json();
+  const { agentId, objective: rawObjective } = await req.json();
   if (!agentId)
     return NextResponse.json({ error: "agentId required" }, { status: 400 });
+
+  const objective =
+    typeof rawObjective === "string"
+      ? rawObjective.trim().slice(0, 500)
+      : "";
 
   const { data: agent, error } = await supabase()
     .from("agents")
@@ -64,12 +92,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "agent not found" }, { status: 404 });
 
   const tierModel = MODEL_BY_TIER[agent.tier] ?? MODEL_BY_TIER.fast;
-  const isGemini = tierModel.startsWith("gemini");
-  const override = typeof agent.model === "string" ? agent.model : "";
-  const model =
-    override && override.startsWith("gemini") === isGemini
-      ? override
-      : tierModel;
+  const requestedModel = typeof agent.model === "string" ? agent.model : "";
+  const allowedModels =
+    ALLOWED_MODELS_BY_TIER[agent.tier] ?? ALLOWED_MODELS_BY_TIER.fast;
+  const selectedModel = allowedModels.has(requestedModel)
+    ? requestedModel
+    : tierModel;
+  // Gemini Live currently provides server-side Google Search grounding.
+  const model = agent.web_grounding_enabled ? configuredGemini : selectedModel;
+  const isGemini = model.startsWith("gemini");
 
   // Memory: inject summaries of the last calls with this agent so it can
   // pick up where the previous conversation left off.
@@ -137,12 +168,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const instructions = buildInstructions(agent, memory);
-  // Until GEMINI_API_KEY is configured, Gemini tiers fall back to the
-  // OpenAI mini flow so calls keep working (the pre-Gemini behavior).
+  const instructions = buildInstructions(agent, memory, objective);
+  // Keep the Fast tier available when Gemini is not configured.
   if (isGemini && !process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY not set, falling back to gpt-realtime-mini");
-    return mintOpenAI("gpt-realtime-mini", instructions, agent.voice);
+    console.warn(`GEMINI_API_KEY not set, falling back to ${OPENAI_FAST}`);
+    return mintOpenAI(OPENAI_FAST, instructions, agent.voice);
   }
   return isGemini
     ? mintGemini(model, instructions, agent.voice)

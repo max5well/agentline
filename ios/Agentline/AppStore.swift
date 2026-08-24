@@ -28,14 +28,16 @@ final class AppStore {
         return config.isConfigured ? BackendClient(config: config) : nil
     }
 
-    // Real provider when the backend is configured, mock otherwise. The
-    // tier picks the provider, mirroring MODEL_BY_TIER on the backend:
-    // big → OpenAI Realtime, fast/local → Gemini Live (until PersonaPlex).
-    static func makeSession(for agent: Agent) -> any VoiceSession {
+    // Route by an explicit model first, then use the tier default. This keeps
+    // the client and backend aligned when Fast uses the OpenAI mini fallback.
+    static func makeSession(for agent: Agent, objective: String? = nil) -> any VoiceSession {
         guard let backend = backendIfConfigured() else { return MockVoiceSession() }
-        return agent.tier == .big
-            ? OpenAIRealtimeSession(backend: backend)
-            : GeminiLiveSession(backend: backend)
+        let usesOpenAI = agent.webGroundingEnabled != true
+            && (agent.model?.starts(with: "gpt-realtime") == true
+                || (agent.model == nil && agent.tier == .big))
+        return usesOpenAI
+            ? OpenAIRealtimeSession(backend: backend, objective: objective)
+            : GeminiLiveSession(backend: backend, objective: objective)
     }
 
     func load() async {

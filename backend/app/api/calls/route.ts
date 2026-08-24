@@ -10,7 +10,6 @@ import {
   remainingQuota,
   OVERAGE_CENTS_PER_MIN,
 } from "@/lib/billing";
-import { pushDigestToMCPTool } from "@/lib/mcp";
 
 // The app POSTs the buffered transcript on hangup (ADR-4).
 // Summary/intents are written inline by the summary worker.
@@ -19,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   const body = await req.json();
-  const { agentId, provider, startedAt, endedAt, transcript } = body;
+  const { agentId, provider, startedAt, endedAt, transcript, objective } = body;
   if (!agentId || !provider || !startedAt) {
     return NextResponse.json(
       { error: "agentId, provider, startedAt required" },
@@ -45,6 +44,8 @@ export async function POST(req: NextRequest) {
     ended_at: endedAt ?? null,
     transcript: transcript ?? [],
     cost_cents: body.costCents ?? null,
+    objective:
+      typeof objective === "string" ? objective.trim().slice(0, 500) || null : null,
   };
   if (auth.userId) row.user_id = auth.userId;
   if (body.model) row.model = body.model;
@@ -76,61 +77,6 @@ export async function POST(req: NextRequest) {
         .from("calls")
         .update({ summary: digest.summary, intents: digest.intents })
         .eq("id", data.id);
-      // MCP handoff (stage 1): push the digest to the user's chosen tool.
-      if (auth.userId) {
-        const { data: mcp } = await supabase()
-          .from("mcp_connections")
-          .select("url, auth_token, tool_name")
-          .eq("user_id", auth.userId)
-          .maybeSingle();
-        if (mcp?.tool_name) {
-          try {
-            await pushDigestToMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
-              title: `Call with ${agentName}`,
-              date: startedAt,
-              summary: digest.summary,
-              actionItems: digest.intents,
-              transcript: (transcript ?? [])
-                .map(
-                  (e: { role: string; text: string }) =>
-                    `${e.role === "user" ? "Max" : agentName}: ${e.text}`,
-                )
-                .join("\n"),
-            });
-          } catch (e) {
-            console.error("MCP handoff failed", e);
-          }
-        }
-
-        // Generic webhook: fire-and-forget POST of the digest.
-        const profile = await getProfile(auth.userId);
-        if (profile?.webhook_url) {
-          try {
-            await fetch(profile.webhook_url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event: "call.completed",
-                agent: agentName,
-                date: startedAt,
-                durationMinutes: endedAt
-                  ? Math.round(
-                      (new Date(endedAt).getTime() -
-                        new Date(startedAt).getTime()) /
-                        60_000,
-                    )
-                  : null,
-                summary: digest.summary,
-                actionItems: digest.intents,
-                transcript: transcript ?? [],
-              }),
-              signal: AbortSignal.timeout(5000),
-            });
-          } catch (e) {
-            console.error("webhook delivery failed", e);
-          }
-        }
-      }
 
       // Roll the call into the agent's memory file (DESIGN-SPEC §3.10).
       // Trivial calls carry no memory-worthy signal — skip the distill.
@@ -206,7 +152,7 @@ export async function GET(req: NextRequest) {
   let query = supabase()
     .from("calls")
     .select(
-      "id, agent_id, provider, started_at, ended_at, transcript, summary, intents, cost_cents",
+      "id, agent_id, provider, started_at, ended_at, transcript, summary, intents, cost_cents, objective, feedback",
     )
     .order("started_at", { ascending: false })
     .limit(50);
@@ -217,6 +163,77 @@ export async function GET(req: NextRequest) {
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ calls: data });
+}
+
+// Correct a transcript or attach post-call quality feedback.
+export async function PATCH(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
+
+  const body = await req.json();
+  if (!body.id)
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const { data: call } = await supabase()
+    .from("calls")
+    .select("id, agent_id")
+    .eq("id", body.id)
+    .eq("user_id", auth.userId)
+    .maybeSingle();
+  if (!call)
+    return NextResponse.json({ error: "call not found" }, { status: 404 });
+
+  const update: Record<string, unknown> = {};
+  if (Array.isArray(body.transcript)) {
+    const transcript = body.transcript
+      .filter(
+        (entry: unknown) =>
+          typeof entry === "object" &&
+          entry !== null &&
+          typeof (entry as { text?: unknown }).text === "string",
+      )
+      .map((entry: { role?: string; text: string; t?: number }) => ({
+        role: entry.role === "agent" ? "agent" : "user",
+        text: entry.text.trim().slice(0, 10_000),
+        t: Number.isFinite(entry.t) ? Math.max(0, entry.t ?? 0) : 0,
+      }))
+      .filter((entry: { text: string }) => entry.text.length > 0)
+      .slice(0, 2_000);
+    update.transcript = transcript;
+
+    const { data: agent } = await supabase()
+      .from("agents")
+      .select("name")
+      .eq("id", call.agent_id)
+      .eq("user_id", auth.userId)
+      .maybeSingle();
+    const digest = await summarizeCall(agent?.name ?? "Agent", transcript);
+    update.summary = digest?.summary ?? null;
+    update.intents = digest?.intents ?? [];
+  }
+
+  if (body.feedback && typeof body.feedback === "object") {
+    const score = (value: unknown) =>
+      Math.min(5, Math.max(1, Math.round(Number(value) || 0)));
+    update.feedback = {
+      latency: score(body.feedback.latency),
+      voice: score(body.feedback.voice),
+      accuracy: score(body.feedback.accuracy),
+      usefulness: score(body.feedback.usefulness),
+    };
+  }
+
+  if (Object.keys(update).length === 0)
+    return NextResponse.json({ error: "nothing to update" }, { status: 400 });
+
+  const { error } = await supabase()
+    .from("calls")
+    .update(update)
+    .eq("id", body.id)
+    .eq("user_id", auth.userId);
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
 
 // Recents supports row deletion (DESIGN-SPEC §3.2).

@@ -16,6 +16,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     private let continuation: AsyncStream<VoiceSessionEvent>.Continuation
 
     private let backend: BackendClient
+    private let objective: String?
     private var ws: URLSessionWebSocketTask?
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -38,8 +39,9 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     )!
     private let playFormat = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
 
-    init(backend: BackendClient) {
+    init(backend: BackendClient, objective: String? = nil) {
         self.backend = backend
+        self.objective = objective
         var c: AsyncStream<VoiceSessionEvent>.Continuation!
         events = AsyncStream { c = $0 }
         continuation = c
@@ -57,7 +59,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         #if targetEnvironment(simulator)
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                      options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+                                      options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
         try? audioSession.setActive(true)
         startAudioEngine()
         #else
@@ -66,7 +68,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             // surfaces them in the system audio-route picker.
             try AVAudioSession.sharedInstance().setCategory(
                 .playAndRecord, mode: .voiceChat,
-                options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+                options: [.allowBluetooth, .allowBluetoothA2DP])
             CallKitController.shared.onAudioActivated = { [weak self] _ in
                 self?.startAudioEngine()
             }
@@ -84,7 +86,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             log.error("CallKit unavailable, continuing without: \(error, privacy: .public)")
             let audioSession = AVAudioSession.sharedInstance()
             try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                          options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+                                          options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
             try? audioSession.setActive(true)
             startAudioEngine()
             callId = nil
@@ -92,7 +94,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         #endif
 
         do {
-            let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
             modelId = token.model
             guard token.provider == providerId else {
                 throw NSError(domain: "Agentline", code: 1, userInfo: [
@@ -190,7 +192,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         ws = nil
         do {
             try await Task.sleep(for: .seconds(1))
-            let token = try await backend.mintRealtimeToken(agentId: agent.id)
+            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
             guard token.provider == providerId else { throw URLError(.badServerResponse) }
             try connect(token: token)
         } catch {

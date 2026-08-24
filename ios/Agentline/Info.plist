@@ -29,12 +29,18 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>AgentlineAppleSignInEnabled</key>
+	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>obsidian</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>agentline uses the camera to take agent avatar photos.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>agentline creates calendar drafts from action items only when you ask.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>agentline adds action items to Reminders only when you ask.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>agentline needs the microphone for voice calls with your agents.</string>
 	<key>NSSupportsLiveActivities</key>

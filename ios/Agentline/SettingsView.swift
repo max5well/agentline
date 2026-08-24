@@ -44,14 +44,19 @@ struct SettingsView: View {
                         toolRow(tool)
                     }
                     webhookRow
-                    Toggle("Share transcript after calls", isOn: $shareTranscriptAfterCalls)
+                    Toggle("Include transcript when sharing", isOn: $shareTranscriptAfterCalls)
                 } header: {
                     Text("Connected tools")
                 } footer: {
-                    Text("Connected tools appear as “Send to” options on every call summary. MCP also receives every call automatically.")
+                    Text("Connected tools appear on call summaries. Exports are sent only when you choose them.")
                 }
 
                 Section("Defaults") {
+                    NavigationLink {
+                        RoutinesView(agents: store.agents)
+                    } label: {
+                        Label("Call Routines", systemImage: "repeat.circle")
+                    }
                     NavigationLink {
                         VoiceProfilesListView()
                     } label: {
@@ -89,17 +94,16 @@ struct SettingsView: View {
 
                 if let session = auth.session {
                     Section("Account") {
-                        HStack {
+                        NavigationLink {
+                            AccountSecurityView()
+                        } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(session.email ?? "Signed in")
                                     .font(.body.weight(.medium))
-                                Text("Agents and call history belong to this account.")
+                                Text("Password, verification and device sessions")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Button("Sign out") { auth.signOut() }
-                                .foregroundStyle(.red)
                         }
                     }
                 }
@@ -171,7 +175,7 @@ struct SettingsView: View {
                 .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Webhook")
-                Text("POST every call to your automation")
+                Text("Send selected call summaries to your automation")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
