@@ -56,7 +56,7 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         rtcSession.useManualAudio = false
         rtcSession.lockForConfiguration()
         try? rtcSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                    options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+                                    options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
         try? rtcSession.setActive(true)
         rtcSession.unlockForConfiguration()
         #else

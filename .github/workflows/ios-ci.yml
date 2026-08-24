@@ -1,0 +1,47 @@
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec ios/project.yml
+      - name: Resolve Swift packages
+        run: >-
+          xcodebuild
+          -project ios/Agentline.xcodeproj
+          -scheme Agentline
+          -resolvePackageDependencies
+      - name: Compile app and extensions
+        run: >-
+          xcodebuild
+          -project ios/Agentline.xcodeproj
+          -scheme Agentline
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination "generic/platform=iOS Simulator"
+          CODE_SIGNING_ALLOWED=NO
+          build
