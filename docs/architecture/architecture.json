@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agentline System Architecture",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "voice-path",
+        "label": "Live voice path",
+        "focus": [
+          "ios",
+          "openai",
+          "api"
+        ],
+        "note": "Follow a call from the iPhone to the realtime provider it speaks to."
+      },
+      {
+        "id": "control-plane",
+        "label": "Control plane and state",
+        "focus": [
+          "ios",
+          "api",
+          "db"
+        ],
+        "note": "Isolate the HTTPS control plane and the Postgres tables behind it."
+      },
+      {
+        "id": "side-systems",
+        "label": "Billing, tools, telemetry",
+        "focus": [
+          "api",
+          "apple",
+          "mcp",
+          "posthog"
+        ],
+        "note": "See purchase verification, tool handoff, and product analytics without call noise."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "openai",
+      "type": "external",
+      "label": "OpenAI",
+      "sublabel": "Realtime + gpt-4o-mini",
+      "pos": [
+        300,
+        60
+      ],
+      "size": [
+        280,
+        100
+      ],
+      "tag": "api.openai.com"
+    },
+    {
+      "id": "gemini",
+      "type": "external",
+      "label": "Gemini Live",
+      "sublabel": "Live API session",
+      "pos": [
+        900,
+        60
+      ],
+      "size": [
+        280,
+        100
+      ],
+      "tag": "fallback tier"
+    },
+    {
+      "id": "ios",
+      "type": "frontend",
+      "label": "Agentline iOS",
+      "sublabel": "SwiftUI, CallKit, WebRTC",
+      "pos": [
+        40,
+        360
+      ],
+      "size": [
+        260,
+        124
+      ],
+      "tag": "iPhone"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Agentline API",
+      "sublabel": "Next.js 15 route handlers",
+      "pos": [
+        520,
+        360
+      ],
+      "size": [
+        300,
+        124
+      ],
+      "tag": "auth, agents, calls"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Supabase Postgres",
+      "sublabel": "agents, calls, events",
+      "pos": [
+        1020,
+        360
+      ],
+      "size": [
+        260,
+        124
+      ],
+      "tag": "service role"
+    },
+    {
+      "id": "posthog",
+      "type": "external",
+      "label": "PostHog",
+      "sublabel": "posthog-ios SDK",
+      "pos": [
+        40,
+        680
+      ],
+      "size": [
+        260,
+        100
+      ],
+      "tag": "product analytics"
+    },
+    {
+      "id": "apple",
+      "type": "external",
+      "label": "App Store",
+      "sublabel": "StoreKit 2 + notifications",
+      "pos": [
+        520,
+        680
+      ],
+      "size": [
+        300,
+        100
+      ],
+      "tag": "subscriptions"
+    },
+    {
+      "id": "mcp",
+      "type": "external",
+      "label": "MCP Servers",
+      "sublabel": "Streamable HTTP JSON-RPC",
+      "pos": [
+        1020,
+        680
+      ],
+      "size": [
+        260,
+        100
+      ],
+      "tag": "tools"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Vercel deployment",
+      "wraps": [
+        "api"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "app-to-api",
+      "from": "ios",
+      "to": "api",
+      "label": "HTTPS + x-app-secret",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-to-db",
+      "from": "api",
+      "to": "db",
+      "label": "SQL over service role",
+      "variant": "emphasis"
+    },
+    {
+      "id": "app-to-openai",
+      "from": "ios",
+      "to": "openai",
+      "label": "WebRTC voice session",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "mint-openai",
+      "from": "api",
+      "to": "openai",
+      "label": "mint secret, summarize",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "mint-gemini",
+      "from": "api",
+      "to": "gemini",
+      "label": "mint Live token",
+      "variant": "security"
+    },
+    {
+      "id": "api-to-mcp",
+      "from": "api",
+      "to": "mcp",
+      "label": "tool call + handoff",
+      "variant": "dashed"
+    },
+    {
+      "id": "apple-to-api",
+      "from": "apple",
+      "to": "api",
+      "label": "signed transactions",
+      "variant": "security"
+    },
+    {
+      "id": "app-to-posthog",
+      "from": "ios",
+      "to": "posthog",
+      "label": "usage events",
+      "variant": "dashed",
+      "labelDy": 110
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client",
+      "items": [
+        "SwiftUI app with CallKit call UI and a Live Activity widget",
+        "OpenAIRealtimeSession and GeminiLiveSession behind one VoiceSession protocol",
+        "MockVoiceSession keeps every screen runnable without a provider"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Backend",
+      "items": [
+        "Next.js 15 route handlers on Vercel, no separate server process",
+        "Routes for agents, calls, usage, avatars, MCP, and Apple billing",
+        "Eleven SQL migrations define agents, calls, profiles, events, and billing"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundary",
+      "items": [
+        "Provider API keys stay server-side; the app receives ephemeral secrets",
+        "Static x-app-secret header plus per-user session tokens",
+        "Apple JWS transactions verified against the App Store certificate chain"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Agentline Call Data Flow",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1075,
+      620
+    ],
+    "views": [
+      {
+        "id": "live-call",
+        "label": "Live call",
+        "focus": [
+          "audio",
+          "agentcfg",
+          "provider",
+          "callsapi"
+        ],
+        "note": "Follow spoken audio and agent context into the realtime session."
+      },
+      {
+        "id": "digest",
+        "label": "Summary and memory",
+        "focus": [
+          "callsapi",
+          "digest",
+          "calls",
+          "memory"
+        ],
+        "note": "See how a finished transcript becomes a summary and a rolling memory file."
+      },
+      {
+        "id": "consumers",
+        "label": "Consumers",
+        "focus": [
+          "calls",
+          "recents",
+          "usage",
+          "handoff"
+        ],
+        "note": "Isolate what reads the stored call record."
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "Capture"
+    },
+    {
+      "label": "Session"
+    },
+    {
+      "label": "Process"
+    },
+    {
+      "label": "Store"
+    },
+    {
+      "label": "Consume"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "audio",
+      "type": "frontend",
+      "label": "Call Audio",
+      "sublabel": "mic and speaker",
+      "stage": 0,
+      "row": 0,
+      "tag": "live"
+    },
+    {
+      "id": "agentcfg",
+      "type": "frontend",
+      "label": "Agent Setup",
+      "sublabel": "prompt, voice, language",
+      "stage": 0,
+      "row": 2,
+      "tag": "per agent"
+    },
+    {
+      "id": "provider",
+      "type": "external",
+      "label": "Realtime Provider",
+      "sublabel": "OpenAI gpt-realtime",
+      "stage": 1,
+      "row": 1,
+      "tag": "WebRTC"
+    },
+    {
+      "id": "callsapi",
+      "type": "backend",
+      "label": "Calls API",
+      "sublabel": "/api/calls",
+      "stage": 2,
+      "row": 0,
+      "tag": "on hang-up"
+    },
+    {
+      "id": "digest",
+      "type": "backend",
+      "label": "Digest Step",
+      "sublabel": "gpt-4o-mini",
+      "stage": 2,
+      "row": 2,
+      "tag": "inline"
+    },
+    {
+      "id": "calls",
+      "type": "database",
+      "label": "calls table",
+      "sublabel": "transcript, summary",
+      "stage": 3,
+      "row": 0,
+      "tag": "Postgres"
+    },
+    {
+      "id": "memory",
+      "type": "database",
+      "label": "agents.memory_file",
+      "sublabel": "rolling context",
+      "stage": 3,
+      "row": 2,
+      "tag": "Postgres"
+    },
+    {
+      "id": "recents",
+      "type": "frontend",
+      "label": "Recents and Summary",
+      "sublabel": "iOS screens",
+      "stage": 4,
+      "row": 0,
+      "tag": "read"
+    },
+    {
+      "id": "usage",
+      "type": "backend",
+      "label": "Usage and Billing",
+      "sublabel": "/api/usage",
+      "stage": 4,
+      "row": 1,
+      "tag": "minutes"
+    },
+    {
+      "id": "handoff",
+      "type": "external",
+      "label": "MCP Handoff",
+      "sublabel": "/api/mcp/push",
+      "stage": 4,
+      "row": 2,
+      "tag": "opt-in"
+    }
+  ],
+  "flows": [
+    {
+      "id": "voice-in",
+      "from": "audio",
+      "to": "provider",
+      "label": "spoken audio",
+      "classification": "live media",
+      "variant": "emphasis"
+    },
+    {
+      "id": "context-in",
+      "from": "agentcfg",
+      "to": "provider",
+      "label": "instructions + memory",
+      "classification": "agent context"
+    },
+    {
+      "id": "transcript-out",
+      "from": "provider",
+      "to": "callsapi",
+      "label": "transcript turns",
+      "classification": "conversation",
+      "variant": "emphasis"
+    },
+    {
+      "id": "record-write",
+      "from": "callsapi",
+      "to": "calls",
+      "label": "call record",
+      "classification": "durable",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -24
+    },
+    {
+      "id": "to-digest",
+      "from": "callsapi",
+      "to": "digest",
+      "label": "raw transcript",
+      "classification": "conversation",
+      "labelDy": 44
+    },
+    {
+      "id": "digest-summary",
+      "from": "digest",
+      "to": "calls",
+      "label": "summary + intents",
+      "classification": "derived"
+    },
+    {
+      "id": "digest-memory",
+      "from": "digest",
+      "to": "memory",
+      "label": "distilled memory",
+      "classification": "derived",
+      "route": "straight",
+      "labelDy": 34
+    },
+    {
+      "id": "history-read",
+      "from": "calls",
+      "to": "recents",
+      "label": "call history",
+      "classification": "read-only",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -24
+    },
+    {
+      "id": "usage-read",
+      "from": "calls",
+      "to": "usage",
+      "label": "duration + cost",
+      "classification": "metered"
+    },
+    {
+      "id": "handoff-push",
+      "from": "memory",
+      "to": "handoff",
+      "label": "summary handoff",
+      "classification": "outbound",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Live path",
+      "items": [
+        "Audio never passes through the backend; the app speaks to the provider directly",
+        "Agent instructions and the memory file are loaded into the session at connect time",
+        "Only the transcript is sent onward when the call ends"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Derived data",
+      "items": [
+        "The summary step runs inline on call save, not as a background worker",
+        "Intents and a short summary are written back onto the call row",
+        "The memory file is re-distilled so the next call starts with context"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Consumers",
+      "items": [
+        "Recents and the post-call summary screen read the stored call",
+        "Usage totals are derived from call duration and model tier",
+        "MCP handoff is an explicit opt-in push, not an automatic export"
+      ]
+    }
+  ]
+}
