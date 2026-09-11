@@ -16,12 +16,18 @@ ready for a broad App Store launch yet.
   database-backed signup limit keyed by HMACs of IP and email identifiers.
 - Replaced the single-user "Max" prompt assumption with the authenticated
   account's display name and a neutral fallback.
+- Implemented the scoped-token, throttled backend and PushKit/CallKit client
+  path for agent-initiated calls; it remains disabled pending paid-team APNs
+  setup and physical-device validation.
 
 ## P0 release blockers
 
 - [ ] Test realtime calls end to end on physical devices, including AirPods,
       Bluetooth, CarPlay, lock/background, interruptions, auth expiry, poor
       network, and reconnects.
+- [ ] Configure the paid Apple team, Push Notifications entitlement and APNs
+      signing key; test agent-initiated calls from terminated/background states,
+      decline/answer races, Focus modes, stale tokens and both APNs environments.
 - [ ] Persist completed calls locally before upload; retry with an idempotency
       key so a network error cannot lose transcripts, summaries, or memory.
 - [ ] Move summary/memory/handoff work out of the synchronous call-record

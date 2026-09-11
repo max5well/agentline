@@ -5,11 +5,18 @@ import SwiftUI
 struct CallView: View {
     let agent: Agent
     let objective: String?
+    let agentInitiated: Bool
     let session: any VoiceSession
 
-    init(agent: Agent, objective: String? = nil, session: any VoiceSession) {
+    init(
+        agent: Agent,
+        objective: String? = nil,
+        agentInitiated: Bool = false,
+        session: any VoiceSession
+    ) {
         self.agent = agent
         self.objective = objective
+        self.agentInitiated = agentInitiated
         self.session = session
     }
 
@@ -77,6 +84,7 @@ struct CallView: View {
             Analytics.capture("call_started", [
                 "tier": agent.tier.rawValue, "provider": session.providerId,
                 "language": agent.language ?? "English",
+                "direction": agentInitiated ? "agent_initiated" : "user_initiated",
             ])
             try? await session.start(agent: agent)
         }
@@ -198,6 +206,7 @@ struct CallView: View {
             "model": session.modelId ?? "unknown", "cost_cents": costCents,
             "transcript_turns": transcript.count,
             "had_error": errorMessage != nil,
+            "direction": agentInitiated ? "agent_initiated" : "user_initiated",
         ])
         // ADR-4: transcript is buffered live and POSTed on hangup; the
         // backend's summary worker fills in the rest.

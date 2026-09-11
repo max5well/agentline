@@ -6,6 +6,9 @@ struct AgentlineApp: App {
 
     init() {
         Analytics.configure()
+        // PushKit requires its registry early in app launch so a terminated
+        // app can be woken and report the incoming call to CallKit in time.
+        VoIPPushManager.shared.start()
         if let userId = AuthStore.shared.session?.userId {
             Analytics.identify(userId: userId)
         }
@@ -19,6 +22,9 @@ struct AgentlineApp: App {
                 AuthView()
             } else {
                 RootTabView()
+                    .task {
+                        VoIPPushManager.shared.syncStoredToken()
+                    }
             }
         }
     }

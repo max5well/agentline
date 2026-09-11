@@ -168,6 +168,20 @@ update the status list in `README.md`.
 
 ## Task 3: the next feature, agents call you
 
+### Implementation update — 2026-09-11
+
+The complete code path now exists on this worktree: migration 0017, hashed and
+revocable ring tokens, atomic throttling, device registration, HTTP/2 APNs VoIP
+delivery, PushKit reception, incoming CallKit answer/decline handling, and
+brief-led sessions on both OpenAI and Gemini. Backend typecheck/build and a
+single-architecture iOS Simulator build pass. Setup and device-test instructions
+are in `docs/AGENT_INITIATED_CALLS.md`.
+
+It is deliberately disabled (`AgentlineVoIPPushEnabled=false`) and not deployed.
+Do not mark Task 3 complete until migration 0017 is applied, APNs is configured
+on the paid Apple team/Vercel, the entitlement is enabled, and the physical-device
+matrix in that document passes.
+
 The strongest differentiator versus ChatGPT Voice and Gemini Live, and the
 inbound mirror of what fonio sells. Sketch:
 

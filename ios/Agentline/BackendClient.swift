@@ -52,6 +52,23 @@ struct RealtimeToken: Codable {
     let toolCount: Int?
 }
 
+struct RingAccessStatus: Codable {
+    struct TokenStatus: Codable {
+        let prefix: String
+        let createdAt: Date
+        let lastUsedAt: Date?
+    }
+    let token: TokenStatus?
+    let deviceCount: Int
+    let apnsConfigured: Bool
+}
+
+struct CreatedRingToken: Codable {
+    let token: String
+    let prefix: String
+    let createdAt: Date
+}
+
 enum AuthError: LocalizedError {
     case signedOut
     case server(String)
@@ -214,6 +231,37 @@ struct BackendClient {
         return try Self.decoder.decode(Wrapper.self, from: data).agents
     }
 
+    // MARK: - Agent-initiated calls (ADR-8)
+
+    func ringAccessStatus() async throws -> RingAccessStatus {
+        let data = try await request("/api/ring-tokens")
+        return try Self.decoder.decode(RingAccessStatus.self, from: data)
+    }
+
+    func createRingToken() async throws -> CreatedRingToken {
+        let data = try await request("/api/ring-tokens", method: "POST")
+        return try Self.decoder.decode(CreatedRingToken.self, from: data)
+    }
+
+    func revokeRingToken() async throws {
+        _ = try await request("/api/ring-tokens", method: "DELETE")
+    }
+
+    func registerVoIPDevice(token: String, environment: String) async throws {
+        struct Body: Encodable { let token, environment: String }
+        _ = try await request(
+            "/api/devices/voip", method: "PUT",
+            body: Body(token: token, environment: environment)
+        )
+    }
+
+    func unregisterVoIPDevice(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        _ = try await request(
+            "/api/devices/voip", method: "DELETE", body: Body(token: token)
+        )
+    }
+
     func calls() async throws -> [CallRecord] {
         struct Wrapper: Codable { let calls: [CallRecord] }
         let data = try await request("/api/calls")
@@ -308,11 +356,23 @@ struct BackendClient {
         _ = try await request("/api/calls?id=\(id.uuidString)", method: "DELETE")
     }
 
-    func mintRealtimeToken(agentId: UUID, objective: String? = nil) async throws -> RealtimeToken {
-        struct Body: Encodable { let agentId: UUID; let objective: String? }
+    func mintRealtimeToken(
+        agentId: UUID,
+        objective: String? = nil,
+        agentInitiated: Bool = false
+    ) async throws -> RealtimeToken {
+        struct Body: Encodable {
+            let agentId: UUID
+            let objective: String?
+            let agentInitiated: Bool
+        }
         let data = try await request(
             "/api/realtime/token", method: "POST",
-            body: Body(agentId: agentId, objective: objective)
+            body: Body(
+                agentId: agentId,
+                objective: objective,
+                agentInitiated: agentInitiated
+            )
         )
         return try Self.decoder.decode(RealtimeToken.self, from: data)
     }

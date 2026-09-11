@@ -85,7 +85,13 @@ struct RootTabView: View {
             CallView(
                 agent: prepared.agent,
                 objective: prepared.objective,
-                session: AppStore.makeSession(for: prepared.agent, objective: prepared.objective)
+                agentInitiated: prepared.agentInitiated,
+                session: AppStore.makeSession(
+                    for: prepared.agent,
+                    objective: prepared.objective,
+                    agentInitiated: prepared.agentInitiated,
+                    callKitId: prepared.callKitId
+                )
             )
         }
         .sheet(item: $reviewingCall) { record in
@@ -102,7 +108,12 @@ struct RootTabView: View {
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { showTemplates = true }
         }
-        .task { await store.load() }
+        .task {
+            await store.load()
+            if let incoming = CallKitController.shared.claimAnsweredCall() {
+                await beginIncomingCall(incoming)
+            }
+        }
         .onAppear(perform: handleLaunchArguments)
         .onAppear {
             if !hasOnboarded && !ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-") }) {
@@ -115,6 +126,13 @@ struct RootTabView: View {
                   let agent = store.agents.first(where: { $0.id == id }) else { return }
             completedAgentId = agent.id
             activeCall = PreparedCall(agent: agent, objective: nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .incomingAgentCallAnswered)) { note in
+            guard let announced = note.object as? IncomingAgentCall,
+                  let incoming = CallKitController.shared.claimAnsweredCall(announced.callId) else { return }
+            Task { @MainActor in
+                await beginIncomingCall(incoming)
+            }
         }
         .preferredColorScheme(AppearanceMode(rawValue: appearance)?.colorScheme ?? nil)
     }
@@ -138,6 +156,23 @@ struct RootTabView: View {
         } else if args.contains("-screen-templates") {
             showTemplates = true
         }
+    }
+
+    private func beginIncomingCall(_ incoming: IncomingAgentCall) async {
+        if !store.agents.contains(where: { $0.id == incoming.agentId }) {
+            await store.load()
+        }
+        guard let agent = store.agents.first(where: { $0.id == incoming.agentId }) else {
+            CallKitController.shared.reportFailed(incoming.callId)
+            return
+        }
+        completedAgentId = agent.id
+        activeCall = PreparedCall(
+            agent: agent,
+            objective: incoming.objective,
+            agentInitiated: true,
+            callKitId: incoming.callId
+        )
     }
 }
 

@@ -96,3 +96,26 @@ in-call tools feel instant or broken.
 
 Off by default per agent (`agents.tools_enabled`): an agent that had no reach
 into the user's accounts yesterday must not silently gain it.
+
+## ADR-8: Agent-initiated calls use scoped tokens and VoIP push
+
+External automations may ring one of the user's agents through
+`POST /api/agents/{id}/ring`. They authenticate with a dedicated `al_ring_`
+token, not a Supabase session. Only a SHA-256 hash is stored, the plaintext is
+shown once, rotation revokes the previous token, agent ownership is checked,
+and an atomic per-user limit prevents a leaked token from continuously waking
+the phone.
+
+The app registers its PushKit VoIP device token with the authenticated backend.
+The ring endpoint sends a short-lived APNs VoIP push over HTTP/2 containing the
+agent identity, call UUID, brief, and optional deadline. The app immediately
+reports it to the existing global `CXProvider`, as required by PushKit. If the
+user answers, CallKit stays in the connecting state until the selected
+`VoiceSession` implementation establishes its realtime transport; audio begins
+only after CallKit activates the audio session.
+
+The brief reuses the existing call-objective and transcript persistence path,
+but token minting marks it as agent-initiated. Both realtime providers are told
+to lead with the reason for the call instead of emitting the normal greeting.
+APNs credentials remain server-side and provider routing still stays behind the
+ADR-2 abstraction.

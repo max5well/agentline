@@ -42,6 +42,12 @@ reliability, server-authoritative billing, durable background processing,
 security controls, legal/account controls, and operational observability remain
 release blockers.
 
+The agent-initiated calling path is implemented behind an off-by-default build
+switch: scoped ring tokens, APNs VoIP delivery, PushKit, incoming CallKit UI and
+brief-led OpenAI/Gemini sessions all compile. It is not production-enabled or
+device-verified because the paid Apple team, APNs key and migration 0017 are not
+configured yet. See [Agent-initiated calls](docs/AGENT_INITIATED_CALLS.md).
+
 Before deploying or distributing the app, read:
 
 - [Production readiness](docs/PRODUCTION_READINESS.md)

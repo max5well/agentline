@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AgentlineAppleSignInEnabled</key>
+	<false/>
+	<key>AgentlineVoIPPushEnabled</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -29,22 +33,24 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>AgentlineAppleSignInEnabled</key>
-	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>obsidian</string>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>agentline uses the camera to take agent avatar photos.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>agentline creates calendar drafts from action items only when you ask.</string>
-	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>agentline adds action items to Reminders only when you ask.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>agentline uses the camera to take agent avatar photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>agentline needs the microphone for voice calls with your agents.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>agentline adds action items to Reminders only when you ask.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>PostHogAPIKey</key>
+	<string></string>
+	<key>PostHogHost</key>
+	<string>https://eu.i.posthog.com</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

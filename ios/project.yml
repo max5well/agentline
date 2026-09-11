@@ -17,13 +17,11 @@ targets:
     type: application
     platform: iOS
     sources: [Agentline]
-    # Sign in with Apple needs a paid Apple Developer team; the free
-    # Personal Team (BF275FGFBQ) rejects the entitlement. Re-enable when
-    # Max joins the program — until then the Apple button errors at tap.
+    # Sign in with Apple and Push Notifications need a paid Apple Developer
+    # team; the free Personal Team rejects these entitlements. Re-enable the
+    # file when Max joins the program and turns on both App ID capabilities.
     # entitlements:
     #   path: Agentline/Agentline.entitlements
-    #   properties:
-    #     com.apple.developer.applesignin: [Default]
     info:
       path: Agentline/Info.plist
       properties:
@@ -33,6 +31,9 @@ targets:
         # PostHog is enabled when a phc_ project key is provided here or via the Xcode scheme.
         PostHogAPIKey: ""
         PostHogHost: https://eu.i.posthog.com
+        # Enable only after adding the Push Notifications capability to the
+        # paid Apple team and configuring APNs on the backend.
+        AgentlineVoIPPushEnabled: false
         UILaunchScreen: {}
         UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: agentline needs the microphone for voice calls with your agents.
@@ -50,6 +51,11 @@ targets:
         SWIFT_VERSION: "5.10"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+      configs:
+        Debug:
+          APNS_ENVIRONMENT: development
+        Release:
+          APNS_ENVIRONMENT: production
     dependencies:
       - package: WebRTC
       - package: PostHog

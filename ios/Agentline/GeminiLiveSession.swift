@@ -17,6 +17,8 @@ final class GeminiLiveSession: NSObject, VoiceSession {
 
     private let backend: BackendClient
     private let objective: String?
+    private let agentInitiated: Bool
+    private let incomingCallId: UUID?
     private var ws: URLSessionWebSocketTask?
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -34,6 +36,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     private var didAttemptReconnect = false
     private var pendingToolCalls = Set<String>()
     private var cancelledToolCalls = Set<String>()
+    private var didBeginOpening = false
 
     // Gemini Live audio contract: PCM16 in at 16 kHz, PCM16 out at 24 kHz.
     private let sendFormat = AVAudioFormat(
@@ -41,9 +44,16 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     )!
     private let playFormat = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
 
-    init(backend: BackendClient, objective: String? = nil) {
+    init(
+        backend: BackendClient,
+        objective: String? = nil,
+        agentInitiated: Bool = false,
+        incomingCallId: UUID? = nil
+    ) {
         self.backend = backend
         self.objective = objective
+        self.agentInitiated = agentInitiated
+        self.incomingCallId = incomingCallId
         var c: AsyncStream<VoiceSessionEvent>.Continuation!
         events = AsyncStream { c = $0 }
         continuation = c
@@ -61,7 +71,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         #if targetEnvironment(simulator)
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                      options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+                                      options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
         try? audioSession.setActive(true)
         startAudioEngine()
         #else
@@ -70,7 +80,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             // surfaces them in the system audio-route picker.
             try AVAudioSession.sharedInstance().setCategory(
                 .playAndRecord, mode: .voiceChat,
-                options: [.allowBluetooth, .allowBluetoothA2DP])
+                options: [.allowBluetoothHFP, .allowBluetoothA2DP])
             CallKitController.shared.onAudioActivated = { [weak self] _ in
                 self?.startAudioEngine()
             }
@@ -83,12 +93,16 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             CallKitController.shared.onCallEnded = { [weak self] in
                 Task { await self?.end() }
             }
-            callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+            if let incomingCallId {
+                callId = incomingCallId
+            } else {
+                callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+            }
         } catch {
             log.error("CallKit unavailable, continuing without: \(error, privacy: .public)")
             let audioSession = AVAudioSession.sharedInstance()
             try? audioSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                          options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+                                          options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
             try? audioSession.setActive(true)
             startAudioEngine()
             callId = nil
@@ -96,7 +110,11 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         #endif
 
         do {
-            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
+            let token = try await backend.mintRealtimeToken(
+                agentId: agent.id,
+                objective: objective,
+                agentInitiated: agentInitiated
+            )
             modelId = token.model
             guard token.provider == providerId else {
                 throw NSError(domain: "Agentline", code: 1, userInfo: [
@@ -206,7 +224,11 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         ws = nil
         do {
             try await Task.sleep(for: .seconds(1))
-            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
+            let token = try await backend.mintRealtimeToken(
+                agentId: agent.id,
+                objective: objective,
+                agentInitiated: agentInitiated
+            )
             guard token.provider == providerId else { throw URLError(.badServerResponse) }
             try connect(token: token)
         } catch {
@@ -224,16 +246,13 @@ final class GeminiLiveSession: NSObject, VoiceSession {
 
         if json["setupComplete"] != nil {
             setupDone = true
-            if let callId { CallKitController.shared.reportConnected(callId) }
+            if let incomingCallId {
+                CallKitController.shared.answerReady(incomingCallId)
+            } else if let callId {
+                CallKitController.shared.reportConnected(callId)
+            }
             continuation.yield(.state(.listening))
-            // The model never speaks unprompted; nudge the greeting turn
-            // (instructions for it are in the system instruction).
-            try? send(json: [
-                "clientContent": [
-                    "turns": [["role": "user", "parts": [["text": "(The call just connected — greet the caller as instructed.)"]]]],
-                    "turnComplete": true,
-                ]
-            ])
+            beginOpeningIfReady()
             return
         }
 
@@ -375,6 +394,7 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             try engine.start()
             player.play()
             engineRunning = true
+            beginOpeningIfReady()
         } catch {
             log.error("audio engine start failed: \(error, privacy: .public)")
             continuation.yield(.error("Audio unavailable: \(error.localizedDescription)"))
@@ -387,6 +407,20 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
         engine.stop()
+    }
+
+    private func beginOpeningIfReady() {
+        guard !didBeginOpening, setupDone, engineRunning else { return }
+        didBeginOpening = true
+        let opening = agentInitiated
+            ? "(The caller just answered your call. Lead immediately with the supplied call brief and why you called; do not use a generic greeting.)"
+            : "(The call just connected — greet the caller as instructed.)"
+        try? send(json: [
+            "clientContent": [
+                "turns": [["role": "user", "parts": [["text": opening]]]],
+                "turnComplete": true,
+            ]
+        ])
     }
 
     private func sendMicrophone(buffer: AVAudioPCMBuffer, converter: AVAudioConverter) {

@@ -16,6 +16,8 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
 
     private let backend: BackendClient
     private let objective: String?
+    private let agentInitiated: Bool
+    private let incomingCallId: UUID?
     private let factory = RTCPeerConnectionFactory()
     private var peerConnection: RTCPeerConnection?
     private var dataChannel: RTCDataChannel?
@@ -30,10 +32,19 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     // Function calls surface on two events; whichever lands first wins and
     // the other is ignored (ADR-7).
     private var handledToolCalls = Set<String>()
+    private var audioActivated = false
+    private var didBeginOpening = false
 
-    init(backend: BackendClient, objective: String? = nil) {
+    init(
+        backend: BackendClient,
+        objective: String? = nil,
+        agentInitiated: Bool = false,
+        incomingCallId: UUID? = nil
+    ) {
         self.backend = backend
         self.objective = objective
+        self.agentInitiated = agentInitiated
+        self.incomingCallId = incomingCallId
         var c: AsyncStream<VoiceSessionEvent>.Continuation!
         events = AsyncStream { c = $0 }
         continuation = c
@@ -59,9 +70,10 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         rtcSession.useManualAudio = false
         rtcSession.lockForConfiguration()
         try? rtcSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                    options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+                                    options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
         try? rtcSession.setActive(true)
         rtcSession.unlockForConfiguration()
+        audioActivated = true
         #else
         do {
             RTCAudioSession.sharedInstance().useManualAudio = true
@@ -71,11 +83,14 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
                 let rtcSession = RTCAudioSession.sharedInstance()
                 rtcSession.audioSessionDidActivate(session)
                 rtcSession.isAudioEnabled = true
+                self.audioActivated = true
+                self.beginOpeningIfReady()
             }
             CallKitController.shared.onAudioDeactivated = { session in
                 let rtcSession = RTCAudioSession.sharedInstance()
                 rtcSession.isAudioEnabled = false
                 rtcSession.audioSessionDidDeactivate(session)
+                self.audioActivated = false
             }
             CallKitController.shared.onMuteChanged = { [weak self] muted in
                 self?.audioTrack?.isEnabled = !muted
@@ -83,19 +98,29 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
             CallKitController.shared.onCallEnded = { [weak self] in
                 Task { await self?.end() }
             }
-            callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+            if let incomingCallId {
+                callId = incomingCallId
+            } else {
+                callId = try await CallKitController.shared.startOutgoingCall(agentName: agent.name)
+            }
         } catch {
             log.error("CallKit unavailable, continuing without: \(error, privacy: .public)")
             RTCAudioSession.sharedInstance().useManualAudio = false
+            audioActivated = true
             callId = nil
         }
         #endif
 
         do {
-            let token = try await backend.mintRealtimeToken(agentId: agent.id, objective: objective)
+            let token = try await backend.mintRealtimeToken(
+                agentId: agent.id,
+                objective: objective,
+                agentInitiated: agentInitiated
+            )
             modelId = token.model
             try await connect(token: token)
-            if let callId { CallKitController.shared.reportConnected(callId) }
+            if let incomingCallId { CallKitController.shared.answerReady(incomingCallId) }
+            if incomingCallId == nil, let callId { CallKitController.shared.reportConnected(callId) }
             continuation.yield(.state(.listening))
         } catch {
             log.error("connect failed: \(error, privacy: .public)")
@@ -177,6 +202,23 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         guard let channel = dataChannel, channel.readyState == .open,
               let payload = try? JSONSerialization.data(withJSONObject: event) else { return }
         channel.sendData(RTCDataBuffer(data: payload, isBinary: false))
+    }
+
+    private func beginOpeningIfReady() {
+        guard !didBeginOpening,
+              audioActivated,
+              let dataChannel,
+              dataChannel.readyState == .open else { return }
+        didBeginOpening = true
+        let event: [String: Any] = agentInitiated
+            ? [
+                "type": "response.create",
+                "response": [
+                    "instructions": "The caller just answered your call. Lead immediately with the supplied call brief and why you called; do not use a generic greeting."
+                ],
+            ]
+            : ["type": "response.create"]
+        sendClientEvent(event)
     }
 
     // The model asked for one of the user's MCP tools. The backend holds the
@@ -278,12 +320,9 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
 
 extension OpenAIRealtimeSession: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        // The model never speaks unprompted; request the greeting turn
-        // (instructions for it are in the session config) once the
-        // channel opens.
-        guard dataChannel.readyState == .open,
-              let payload = try? JSONSerialization.data(withJSONObject: ["type": "response.create"]) else { return }
-        dataChannel.sendData(RTCDataBuffer(data: payload, isBinary: false))
+        // The model never speaks unprompted. Wait for both the data channel
+        // and CallKit-owned audio session so no opening audio is lost.
+        beginOpeningIfReady()
     }
 
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
@@ -336,7 +375,11 @@ extension OpenAIRealtimeSession: RTCPeerConnectionDelegate {
             self.dataChannel = nil
             self.peerConnection = nil
             do {
-                let token = try await self.backend.mintRealtimeToken(agentId: agent.id, objective: objective)
+                let token = try await self.backend.mintRealtimeToken(
+                    agentId: agent.id,
+                    objective: objective,
+                    agentInitiated: self.agentInitiated
+                )
                 try await self.connect(token: token)
                 self.continuation.yield(.state(.listening))
                 self.reconnectTask = nil

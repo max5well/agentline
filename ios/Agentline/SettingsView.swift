@@ -53,6 +53,11 @@ struct SettingsView: View {
 
                 Section("Defaults") {
                     NavigationLink {
+                        AgentCallsView(agents: store.agents)
+                    } label: {
+                        Label("Agents Call You", systemImage: "phone.arrow.down.left")
+                    }
+                    NavigationLink {
                         RoutinesView(agents: store.agents)
                     } label: {
                         Label("Call Routines", systemImage: "repeat.circle")

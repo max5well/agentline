@@ -10,6 +10,7 @@
 | Google Gemini API | Gemini 3.1 Flash Live primary fast model; Gemini 2.5 rollback | `GEMINI_API_KEY`, optional `GEMINI_LIVE_MODEL` | Yes for the default fast tier |
 | Apple StoreKit 2 / App Store Connect | Subscriptions and prepaid credit packs | native StoreKit code and StoreKit test configuration | Yes for paid App Store launch |
 | Apple platform services | Microphone, CallKit, Live Activities, notifications, Reminders and Calendar | native iOS frameworks and Info.plist usage descriptions | Yes for the respective features |
+| Apple Push Notification service | Delivers agent-initiated VoIP call invitations to registered iPhones | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`, `APNS_TOPIC`; PushKit token | Yes for Agents Call You |
 
 ## Product analytics and optional destinations
 
@@ -38,6 +39,7 @@ privacy policy or legal review.
 | Purchase and subscription state | Payments, entitlement and fraud prevention | Yes | No | Apple and Supabase |
 | Product interactions and diagnostics | Analytics and reliability | Yes when analytics is enabled | No | PostHog EU and hosting logs on Vercel |
 | User-selected tool arguments, results or call exports | Perform an action or explicit export requested by the user | Depends on the destination account | No | The specific MCP server, webhook, Google Drive, Obsidian, or Apple app selected by the user |
+| VoIP device token, agent display name and incoming-call brief | Deliver an agent-initiated call | Yes | No | Apple Push Notification service; Vercel and Supabase |
 
 The in-app disclosure and public privacy policy must say that enabling an MCP
 tool can send the content needed for that action to a server chosen by the

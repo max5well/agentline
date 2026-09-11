@@ -4,6 +4,8 @@ struct PreparedCall: Identifiable {
     let id = UUID()
     let agent: Agent
     let objective: String?
+    var agentInitiated = false
+    var callKitId: UUID? = nil
 }
 
 struct CallPreparationView: View {

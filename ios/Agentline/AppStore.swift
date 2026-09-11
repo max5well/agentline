@@ -30,14 +30,29 @@ final class AppStore {
 
     // Route by an explicit model first, then use the tier default. This keeps
     // the client and backend aligned when Fast uses the OpenAI mini fallback.
-    static func makeSession(for agent: Agent, objective: String? = nil) -> any VoiceSession {
+    static func makeSession(
+        for agent: Agent,
+        objective: String? = nil,
+        agentInitiated: Bool = false,
+        callKitId: UUID? = nil
+    ) -> any VoiceSession {
         guard let backend = backendIfConfigured() else { return MockVoiceSession() }
         let usesOpenAI = agent.webGroundingEnabled != true
             && (agent.model?.starts(with: "gpt-realtime") == true
                 || (agent.model == nil && agent.tier == .big))
         return usesOpenAI
-            ? OpenAIRealtimeSession(backend: backend, objective: objective)
-            : GeminiLiveSession(backend: backend, objective: objective)
+            ? OpenAIRealtimeSession(
+                backend: backend,
+                objective: objective,
+                agentInitiated: agentInitiated,
+                incomingCallId: callKitId
+            )
+            : GeminiLiveSession(
+                backend: backend,
+                objective: objective,
+                agentInitiated: agentInitiated,
+                incomingCallId: callKitId
+            )
     }
 
     func load() async {
