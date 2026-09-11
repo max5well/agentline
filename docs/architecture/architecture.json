@@ -88,7 +88,7 @@
       "id": "api",
       "type": "backend",
       "label": "Agentline API",
-      "sublabel": "Next.js 15 route handlers",
+      "sublabel": "Next.js 16 route handlers",
       "pos": [
         520,
         360
@@ -246,7 +246,7 @@
       "dot": "emerald",
       "title": "Backend",
       "items": [
-        "Next.js 15 route handlers on Vercel, no separate server process",
+        "Next.js 16 route handlers on Vercel, no separate server process",
         "Routes for agents, calls, usage, avatars, MCP, and Apple billing",
         "Eleven SQL migrations define agents, calls, profiles, events, and billing"
       ]
