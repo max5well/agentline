@@ -34,11 +34,13 @@ The iOS app uses a provider abstraction so realtime engines can evolve without c
 ## Current status
 
 The core app, backend, multi-user auth, OpenAI/Gemini sessions, call history,
-summaries, memory, integrations, and StoreKit flows are implemented. Physical
-device end-to-end reliability—including live MCP tool calls on both voice
-providers—server-authoritative billing, durable background processing, security
-controls, legal/account controls, and operational observability remain release
-blockers.
+summaries, memory, integrations, StoreKit flows, and in-call MCP tools are
+implemented. In-call tools were verified end to end against a real remote MCP
+server on both OpenAI Realtime and Gemini Live, including spoken success results
+and a deliberately failing tool that did not kill the call. Physical-device
+reliability, server-authoritative billing, durable background processing,
+security controls, legal/account controls, and operational observability remain
+release blockers.
 
 Before deploying or distributing the app, read:
 
