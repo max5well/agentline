@@ -71,7 +71,11 @@ export async function POST(req: NextRequest) {
         memory_enabled: boolean;
       }>();
     const agentName = agent?.name ?? "Agent";
-    const digest = await summarizeCall(agentName, transcript ?? []);
+    const digest = await summarizeCall(
+      agentName,
+      auth.callerName,
+      transcript ?? [],
+    );
     if (digest) {
       await supabase()
         .from("calls")
@@ -83,6 +87,7 @@ export async function POST(req: NextRequest) {
       if (agent?.memory_enabled && !digest.trivial) {
         const file = await distillMemory(
           agentName,
+          auth.callerName,
           agent.memory_file ?? "",
           digest.summary,
         );
@@ -207,7 +212,11 @@ export async function PATCH(req: NextRequest) {
       .eq("id", call.agent_id)
       .eq("user_id", auth.userId)
       .maybeSingle();
-    const digest = await summarizeCall(agent?.name ?? "Agent", transcript);
+    const digest = await summarizeCall(
+      agent?.name ?? "Agent",
+      auth.callerName,
+      transcript,
+    );
     update.summary = digest?.summary ?? null;
     update.intents = digest?.intents ?? [];
   }

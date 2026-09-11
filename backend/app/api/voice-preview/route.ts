@@ -8,7 +8,7 @@ import { OPENAI_FROM_GEMINI, resolveOpenAIVoice } from "@/lib/voices";
 // the real sound; `style` carries the voice-profile prompt as delivery
 // instructions on both.
 const SAMPLE =
-  "Hey Max! This is how I sound. Ready when you are — just start talking.";
+  "Hey! This is how I sound. Ready when you are — just start talking.";
 
 // TTS voice catalog differs slightly from realtime; map any miss.
 const FALLBACK: Record<string, string> = {

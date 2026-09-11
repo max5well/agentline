@@ -20,9 +20,9 @@ Inbound AI phone assistant for European SMBs (doctors, tradespeople, hotels, rea
 
 ## Where agentline stands (repo state, Sept 2026)
 
-Built: native iOS app, CallKit, OpenAI Realtime + Gemini Live behind one VoiceSession protocol, three brain tiers, per-agent persona/voice/language/model, rolling memory file per agent, live captions, transcripts + summaries + action items, handoff to Obsidian / Google Drive / MCP tool / generic webhook, 7 agent templates + onboarding, Siri intents, Live Activity, Supabase Auth (email/Apple/Google), plans + quotas + credit + Apple IAP, PostHog.
+Built: native iOS app, CallKit, OpenAI Realtime + Gemini Live behind one VoiceSession protocol, three brain tiers, per-agent persona/voice/language/model, rolling memory file per agent, live captions, transcripts + summaries + action items, in-call MCP tools, handoff to Obsidian / Google Drive / MCP tool / generic webhook, 7 agent templates + onboarding, Siri intents, Live Activity, Supabase Auth (email confirmation/Apple/Google), distributed signup throttling, plans + quotas + credit + Apple IAP, PostHog.
 
-Not yet: in-call tool use, agent-initiated calls, PSTN / phone number, PersonaPlex local tier, summary worker off the request path, rate limiting on signup, non-"Max" memory prompts (summarize.ts still hardcodes the user name).
+Not yet: agent-initiated calls, PSTN / phone number, PersonaPlex local tier, or a summary worker off the request path.
 
 ## The mirror image
 
@@ -68,7 +68,7 @@ Fonio uses verticals and resellers. agentline's equivalent: recipes and integrat
 
 ## Housekeeping before any of this is public
 
-Rate limiting and email confirmation on signup (ADR-6 notes both are missing). Memory and summary prompts must use the account's name, not "Max". Summary worker off the request path once call volume grows (Vercel cron or Supabase queue). App Store review needs a privacy nutrition label that matches the provider list above.
+Extend rate limiting beyond signup before launch. Keep the summary worker on the request path only while call volume is low, then move it to a Vercel workflow or Supabase queue. App Store review still needs the privacy nutrition label and public policy to match the provider inventory above.
 
 ## North-star metrics to copy
 

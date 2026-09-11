@@ -24,6 +24,28 @@
 | Apple Reminders / Calendar | Optional explicit action export | Requests permission only when the user chooses the action |
 | Email / Messages / Files | Uses the iOS share sheet | No transactional email vendor is required for call-file sharing |
 
+## App Store privacy disclosure draft
+
+Review this mapping against the final binary and App Store Connect form before
+every release. It is a technical inventory, not a substitute for the public
+privacy policy or legal review.
+
+| Data | Purpose | Linked to the user | Tracking | Processor / recipient |
+| --- | --- | --- | --- | --- |
+| Email address, account ID and optional display name | Account management and authentication | Yes | No | Supabase |
+| Live microphone audio and the model's audio response | Real-time voice conversation | Yes, for the active session | No | OpenAI or Google Gemini, according to the selected model |
+| Transcript, summary, action items, agent persona and memory | App functionality, history and personalization | Yes | No | Supabase; OpenAI for summary/memory processing |
+| Purchase and subscription state | Payments, entitlement and fraud prevention | Yes | No | Apple and Supabase |
+| Product interactions and diagnostics | Analytics and reliability | Yes when analytics is enabled | No | PostHog EU and hosting logs on Vercel |
+| User-selected tool arguments, results or call exports | Perform an action or explicit export requested by the user | Depends on the destination account | No | The specific MCP server, webhook, Google Drive, Obsidian, or Apple app selected by the user |
+
+The in-app disclosure and public privacy policy must say that enabling an MCP
+tool can send the content needed for that action to a server chosen by the
+user. Agentline cannot control that server's retention or downstream use. Do
+not claim that transcripts stay only on-device or that OpenAI is the sole AI
+processor: the selected voice tier determines whether OpenAI or Google receives
+the live audio and conversation context.
+
 ## Not present
 
 - **Stripe is not used.** Billing is implemented with Apple StoreKit and App Store receipts.

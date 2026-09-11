@@ -12,9 +12,11 @@ export type CallDigest = { summary: string; intents: string[]; trivial?: boolean
 // distilled prose the agent gets at the start of every call.
 export async function distillMemory(
   agentName: string,
+  callerName: string | null,
   existingFile: string,
   summary: string,
 ): Promise<string | null> {
+  const caller = callerName ?? "the caller";
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -27,9 +29,9 @@ export async function distillMemory(
         {
           role: "system",
           content:
-            `You maintain the memory file of ${agentName}, an AI voice agent, about their ongoing conversations with Max. ` +
+            `You maintain the memory file of ${agentName}, an AI voice agent, about ongoing conversations with ${caller}. ` +
             "Merge the new call summary into the existing file. Keep it under 250 words of plain prose: " +
-            "durable facts about Max, ongoing topics and where they left off, preferences, open follow-ups. " +
+            `durable facts about ${caller}, ongoing topics and where they left off, preferences, open follow-ups. ` +
             "STRICT ACCURACY: keep only facts directly supported by the summaries. Never infer interests or expand topics beyond what was said. " +
             "No advice, no strategy, no notes about what the agent 'should' do — facts only. When in doubt, drop it; a short accurate file beats a rich invented one. " +
             "Drop stale or superseded points. Reply with the updated file only.",
@@ -51,6 +53,7 @@ export async function distillMemory(
 
 export async function summarizeCall(
   agentName: string,
+  callerName: string | null,
   transcript: TranscriptEntry[],
 ): Promise<CallDigest | null> {
   if (transcript.length === 0) return null;
@@ -65,8 +68,9 @@ export async function summarizeCall(
     };
   }
 
+  const caller = callerName ?? "Caller";
   const lines = transcript
-    .map((e) => `${e.role === "user" ? "Max" : agentName}: ${e.text}`)
+    .map((e) => `${e.role === "user" ? caller : agentName}: ${e.text}`)
     .join("\n");
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -82,12 +86,12 @@ export async function summarizeCall(
         {
           role: "system",
           content:
-            "You summarize a voice call between Max and an AI agent. " +
+            `You summarize a voice call between ${caller} and an AI agent. ` +
             'Reply with JSON: {"summary": string, "intents": string[]}. ' +
             "summary: past tense, what was actually discussed and concluded, at most 4 sentences. " +
             "STRICT ACCURACY: only include things explicitly said in the transcript — never invent topics, names, facts, or interests. " +
             "If a phrase looks like a garbled transcription, omit it rather than guess. " +
-            "intents: concrete follow-ups or action items Max took away; empty array if none.",
+            `intents: concrete follow-ups or action items ${caller} took away; empty array if none.`,
         },
         { role: "user", content: lines },
       ],

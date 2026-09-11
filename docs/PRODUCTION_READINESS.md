@@ -12,6 +12,10 @@ ready for a broad App Store launch yet.
   invariants.
 - Added pull-request CI for a clean install, strict TypeScript check, and
   production backend build.
+- Confirmed Supabase email confirmation is enabled and added an atomic,
+  database-backed signup limit keyed by HMACs of IP and email identifiers.
+- Replaced the single-user "Max" prompt assumption with the authenticated
+  account's display name and a neutral fallback.
 
 ## P0 release blockers
 
@@ -24,8 +28,8 @@ ready for a broad App Store launch yet.
       request into a durable job with retries and observability.
 - [ ] Replace the custom StoreKit JWS verifier with Apple's App Store Server
       Library and pinned Apple root certificates.
-- [ ] Add distributed rate limits for signup, login, token minting, avatar
-      generation, summaries, and voice previews.
+- [ ] Extend distributed rate limits beyond signup to login, token minting,
+      avatar generation, summaries, and voice previews.
 - [ ] Make usage authoritative on the server. Client-supplied timestamps,
       model, cost, and completed-call uploads cannot be the billing ledger.
 - [ ] Prevent SSRF for MCP and webhook URLs with a controlled outbound proxy or

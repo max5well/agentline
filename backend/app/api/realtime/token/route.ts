@@ -40,7 +40,12 @@ const ALLOWED_MODELS_BY_TIER: Record<string, Set<string>> = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildInstructions(agent: any, memory: string, objective: string): string {
+function buildInstructions(
+  agent: any,
+  memory: string,
+  objective: string,
+  callerName: string | null,
+): string {
   const style = agent.voice_style
     ? `\n\nVoice and delivery: ${agent.voice_style}`
     : "";
@@ -51,15 +56,16 @@ function buildInstructions(agent: any, memory: string, objective: string): strin
     .split(",")
     .map((l: string) => l.trim())
     .filter(Boolean);
-  // Answer language is fixed; input language is free — Max may speak any
+  const caller = callerName ?? "the caller";
+  // Answer language is fixed; input language is free — the caller may speak any
   // language he likes (e.g. to practice one) and still get answers in the
   // agent's language(s).
   const languageRule =
     languages.length > 1
-      ? `Always answer in ${languages[0]} by default; you may switch your answers between ${languages.join(", ")} if Max explicitly asks or clearly switches, but answer in no other languages. Max may speak to you in any language — always understand him`
-      : `Always answer in ${languages[0] ?? "English"}, no matter which language Max speaks to you in — he may use any language and you must understand him, but your replies stay in ${languages[0] ?? "English"} unless your persona explicitly requires another language`;
+      ? `Always answer in ${languages[0]} by default; you may switch your answers between ${languages.join(", ")} if ${caller} explicitly asks or clearly switches, but answer in no other languages. ${caller} may speak to you in any language — always understand them`
+      : `Always answer in ${languages[0] ?? "English"}, no matter which language ${caller} speaks to you in — they may use any language and you must understand them, but your replies stay in ${languages[0] ?? "English"} unless your persona explicitly requires another language`;
   const objectiveRule = objective
-    ? `\n\nCurrent call objective: ${objective}. Help Max achieve it, periodically keep the conversation on track, and close with a concise recap and next step.`
+    ? `\n\nCurrent call objective: ${objective}. Help the caller achieve it, periodically keep the conversation on track, and close with a concise recap and next step.`
     : "";
   const vocabulary = Array.isArray(agent.vocabulary)
     ? agent.vocabulary.filter((term: unknown) => typeof term === "string").slice(0, 100)
@@ -70,7 +76,10 @@ function buildInstructions(agent: any, memory: string, objective: string): strin
   const groundingRule = agent.web_grounding_enabled
     ? "\n\nFor claims that may have changed, use web search before answering. In the spoken answer, name the source and publication date naturally. Distinguish verified facts from inference and say when current information could not be confirmed."
     : "";
-  return `${agent.persona}${style}\n\n${languageRule}. The caller is Max. Open the call by greeting him in one short, casual sentence, then let him lead.${objectiveRule}${vocabularyRule}${groundingRule}${memory}`;
+  const callerRule = callerName
+    ? `The caller's display name is ${JSON.stringify(callerName)}.`
+    : "The caller has not provided a display name.";
+  return `${agent.persona}${style}\n\n${languageRule}. ${callerRule} Open the call with one short, casual greeting, then let the caller lead.${objectiveRule}${vocabularyRule}${groundingRule}${memory}`;
 }
 
 // Mints a short-lived client credential for one call (ADR-3): an OpenAI
@@ -113,7 +122,7 @@ export async function POST(req: NextRequest) {
   // pick up where the previous conversation left off.
   let memory = "";
   if (agent.memory_enabled && agent.memory_file) {
-    memory = `\n\nWhat you remember about Max and your past conversations:\n${agent.memory_file}`;
+    memory = `\n\nWhat you remember about the caller and your past conversations:\n${agent.memory_file}`;
   } else if (agent.memory_enabled) {
     const { data: recent } = await supabase()
       .from("calls")
@@ -126,7 +135,7 @@ export async function POST(req: NextRequest) {
       const bullets = recent
         .map((c) => `- (${new Date(c.started_at).toDateString()}) ${c.summary}`)
         .join("\n");
-      memory = `\n\nWhat you remember from your recent calls with Max, most recent first:\n${bullets}`;
+      memory = `\n\nWhat you remember from your recent calls with the caller, most recent first:\n${bullets}`;
     }
   }
 
@@ -181,7 +190,12 @@ export async function POST(req: NextRequest) {
     ? await loadCallTools(auth.userId ?? null)
     : null;
 
-  let instructions = buildInstructions(agent, memory, objective);
+  let instructions = buildInstructions(
+    agent,
+    memory,
+    objective,
+    auth.callerName,
+  );
   if (callTools) instructions += toolInstructions(callTools.tools);
 
   // Keep the Fast tier available when Gemini is not configured.

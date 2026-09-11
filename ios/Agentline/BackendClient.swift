@@ -166,12 +166,12 @@ struct BackendClient {
         case confirmationRequired(String)
     }
 
-    func signUp(email: String, password: String) async throws -> SignupResult {
-        struct Body: Encodable { let email, password: String }
+    func signUp(name: String, email: String, password: String) async throws -> SignupResult {
+        struct Body: Encodable { let name, email, password: String }
         struct Pending: Codable { let confirmationRequired: Bool; let email: String }
         let (data, status) = try await bareRequest(
             "/api/auth/signup", method: "POST",
-            body: Body(email: email, password: password), bearer: nil
+            body: Body(name: name, email: email, password: password), bearer: nil
         )
         if status == 202, let pending = try? Self.decoder.decode(Pending.self, from: data) {
             return .confirmationRequired(pending.email)

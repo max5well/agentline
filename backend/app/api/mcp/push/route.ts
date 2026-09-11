@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
 
   const agentName =
     (call.agents as unknown as { name: string })?.name ?? "Agent";
+  const caller = auth.callerName ?? "Caller";
   try {
     await pushDigestToMCPTool(mcp.url, mcp.auth_token, mcp.tool_name, {
       title: `Call with ${agentName}`,
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       summary: call.summary ?? "",
       actionItems: call.intents ?? [],
       transcript: ((call.transcript as { role: string; text: string }[]) ?? [])
-        .map((e) => `${e.role === "user" ? "Max" : agentName}: ${e.text}`)
+        .map((e) => `${e.role === "user" ? caller : agentName}: ${e.text}`)
         .join("\n"),
     });
     return NextResponse.json({ ok: true });

@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-// Usage analytics (Max's request #9): minutes per agent, favorite
+// Usage analytics: minutes per agent, favorite
 // model, call habits. Client-side over the fetched records (last 50
 // calls — server-side aggregation comes with /api/usage).
 struct AnalyticsView: View {

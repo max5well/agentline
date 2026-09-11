@@ -10,6 +10,7 @@ struct AuthView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var email = ""
+    @State private var name = ""
     @State private var password = ""
     @State private var creatingAccount = false
     @State private var busy = false
@@ -106,6 +107,14 @@ struct AuthView: View {
 
     private var emailForm: some View {
         VStack(spacing: 0) {
+            if creatingAccount {
+                TextField("Your name", text: $name)
+                    .textInputAutocapitalization(.words)
+                    .textContentType(.name)
+                    .padding(.horizontal, 16)
+                    .frame(height: 54)
+                Divider()
+            }
             TextField("Email", text: $email)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -134,7 +143,10 @@ struct AuthView: View {
                 .frame(height: 38)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(email.isEmpty || password.isEmpty)
+        .disabled(
+            email.isEmpty || password.isEmpty
+                || (creatingAccount && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        )
     }
 
     private var divider: some View {
@@ -185,7 +197,7 @@ struct AuthView: View {
         errorMessage = nil
         do {
             if creatingAccount {
-                switch try await backend.signUp(email: email, password: password) {
+                switch try await backend.signUp(name: name, email: email, password: password) {
                 case .session(let session):
                     AuthStore.shared.signedIn(session)
                 case .confirmationRequired(let address):
@@ -307,8 +319,20 @@ struct AuthView: View {
         return AuthSession(
             accessToken: access, refreshToken: refresh, expiresAt: expiresAt,
             userId: claims["sub"] as? String ?? "",
-            email: claims["email"] as? String
+            email: claims["email"] as? String,
+            name: Self.displayName(from: claims["user_metadata"])
         )
+    }
+
+    private static func displayName(from metadata: Any?) -> String? {
+        guard let values = metadata as? [String: Any] else { return nil }
+        for key in ["display_name", "full_name", "name", "given_name"] {
+            if let value = values[key] as? String {
+                let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty { return String(cleaned.prefix(80)) }
+            }
+        }
+        return nil
     }
 
     nonisolated static func decodeJWTClaims(_ jwt: String) -> [String: Any] {

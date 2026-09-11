@@ -9,6 +9,21 @@ touching anything. The competitive rationale behind the roadmap below is in
 `~/personal/repos/agentline-design`. Never touch Nox repos, other personal
 repos or Drive folders.
 
+## Completion update — 2026-09-11
+
+Task 1 is complete on the current `main`: migration 0015 is applied, the
+backend typecheck/build and generated iOS project build pass, and production is
+live at `agentline-chi.vercel.app`. OpenAI Realtime and Gemini Live each called
+Context7 through the in-call MCP path and spoke the result; both also survived a
+deliberately invalid tool call and stated that it failed.
+
+Task 2's immediate housekeeping is complete: Supabase email confirmation was
+already enabled, migration 0016 adds distributed signup throttling, prompts and
+exports use the authenticated display name instead of "Max", and
+`docs/INTEGRATIONS.md` contains the App Store privacy disclosure mapping. The
+summary worker remains inline as ADR-4 specifies until call volume justifies
+durable queue infrastructure.
+
 ## Where things stand
 
 Commit `7b3209b` added in-call MCP tools (ADR-7): the MCP tools a user

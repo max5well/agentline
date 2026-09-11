@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Tool connections (Max's #6). Obsidian is fully local (vault name +
+// Tool connections. Obsidian is fully local (vault name +
 // URL scheme), MCP lives on the backend (server URL + chosen tool),
 // Google Drive waits for its OAuth client.
 struct ConnectedTool: Identifiable {
@@ -34,6 +34,7 @@ enum ObsidianConnector {
 
     @MainActor
     static func save(record: CallRecord, agent: Agent, includeTranscript: Bool) {
+        let caller = KeychainSession.load()?.name ?? "You"
         var md = "## Call with \(agent.name)\n\n"
         md += "_\(record.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(record.durationLabel)_\n\n"
         if let summary = record.summary { md += "### Summary\n\(summary)\n\n" }
@@ -42,7 +43,7 @@ enum ObsidianConnector {
         }
         if includeTranscript, !record.transcript.isEmpty {
             md += "### Transcript\n"
-            md += record.transcript.map { "**\($0.role == "user" ? "Max" : agent.name):** \($0.text)" }.joined(separator: "\n")
+            md += record.transcript.map { "**\($0.role == "user" ? caller : agent.name):** \($0.text)" }.joined(separator: "\n")
         }
         // obsidian://new opens the app and creates the note. URLs have
         // practical length limits — clamp the body.

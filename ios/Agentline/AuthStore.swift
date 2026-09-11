@@ -11,6 +11,7 @@ struct AuthSession: Codable {
     var expiresAt: Date
     var userId: String
     var email: String?
+    var name: String?
 }
 
 // What the backend's auth endpoints return.
@@ -20,12 +21,13 @@ struct SessionResponse: Codable {
     let expiresAt: TimeInterval // epoch seconds
     let userId: String
     let email: String?
+    let name: String?
 
     var session: AuthSession {
         AuthSession(
             accessToken: accessToken, refreshToken: refreshToken,
             expiresAt: Date(timeIntervalSince1970: expiresAt),
-            userId: userId, email: email
+            userId: userId, email: email, name: name
         )
     }
 }
