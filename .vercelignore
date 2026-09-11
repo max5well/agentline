@@ -1,0 +1,11 @@
+.git/
+docs/
+ios/
+supabase/
+CLAUDE.md
+README.md
+
+backend/.env*
+backend/.next/
+backend/.vercel/
+backend/node_modules/
