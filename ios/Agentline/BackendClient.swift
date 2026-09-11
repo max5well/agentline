@@ -45,6 +45,11 @@ struct RealtimeToken: Codable {
     // so the backend hands the config over. OpenAI bakes it into the secret.
     let instructions: String?
     let voice: String?
+    /// Gemini only: function declarations for the user's MCP tools (ADR-7).
+    /// OpenAI gets the same list baked into the client secret.
+    let tools: [JSONValue]?
+    /// How many tools the agent was given, either way.
+    let toolCount: Int?
 }
 
 enum AuthError: LocalizedError {
@@ -271,6 +276,22 @@ struct BackendClient {
 
     func mcpDisconnect() async throws {
         _ = try await request("/api/mcp", method: "DELETE")
+    }
+
+    // One tool call from a live session (ADR-7). Arguments travel as the
+    // provider's own JSON string so neither side has to re-shape them.
+    func mcpCallTool(name: String, argumentsJSON: String) async throws -> (result: String, isError: Bool) {
+        struct Body: Encodable { let name: String; let argumentsJSON: String }
+        struct Response: Codable { let result: String; let isError: Bool? }
+        let data = try await request("/api/mcp/call", method: "POST",
+                                     body: Body(name: name, argumentsJSON: argumentsJSON))
+        let response = try Self.decoder.decode(Response.self, from: data)
+        return (response.result, response.isError ?? false)
+    }
+
+    func mcpSelectCallTools(_ names: [String]) async throws {
+        struct Body: Encodable { let callTools: [String] }
+        _ = try await request("/api/mcp", method: "PATCH", body: Body(callTools: names))
     }
 
     func mcpPush(callId: UUID) async throws {

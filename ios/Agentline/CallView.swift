@@ -24,6 +24,8 @@ struct CallView: View {
     @State private var showTranscript = false
     @State private var activity: Activity<CallActivityAttributes>?
     @State private var finishing = false
+    /// Tool the agent is running right now, shown so a pause has a reason (ADR-7).
+    @State private var activeTool: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,6 +63,12 @@ struct CallView: View {
                 case .partialTranscript(let text):
                     partialCaption = text
                 case .costTick(let cents): costCents = cents
+                case .toolCall(let name):
+                    activeTool = Self.friendlyToolName(name)
+                case .toolResult:
+                    // The agent says out loud whether it worked, so the line
+                    // just goes away.
+                    activeTool = nil
                 case .error(let message): errorMessage = message
                 }
             }
@@ -105,8 +113,15 @@ struct CallView: View {
         }
     }
 
+    // "calendar_create_event" reads badly at a glance from a car mount.
+    static func friendlyToolName(_ name: String) -> String {
+        name.replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+    }
+
     private var stateLabel: String {
-        switch state {
+        if let activeTool { return "Using \(activeTool)" }
+        return switch state {
         case .idle, .connecting: "Connecting"
         case .listening: "Listening"
         case .agentSpeaking: "Speaking"

@@ -97,11 +97,23 @@ struct MCPConnection: Codable {
     let url: String
     let toolName: String?
     let serverName: String?
+    /// Everything the server exposes, cached by the backend at connect time.
+    var tools: [MCPTool]?
+    /// Subset the agents may call mid-conversation; nil = all of them (ADR-7).
+    var callTools: [String]?
+
+    /// Tools actually offered during calls.
+    var activeCallTools: [String] {
+        let all = (tools ?? []).map(\.name)
+        guard let callTools else { return all }
+        return all.filter { callTools.contains($0) }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case url
+        case url, tools
         case toolName = "tool_name"
         case serverName = "server_name"
+        case callTools = "call_tools"
     }
 }
 

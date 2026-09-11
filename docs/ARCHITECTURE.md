@@ -53,3 +53,46 @@ The app is going multi-user, so Supabase Auth (GoTrue) becomes the identity prov
 All email/Apple auth calls are proxied through backend `/api/auth/*` routes, so API keys stay server-side (consistent with ADR-3) and the app only talks to our endpoints. The app stores the access/refresh token pair in the Keychain and refreshes on 401.
 
 Data routes replace `x-app-secret` with `Authorization: Bearer <jwt>`, verified via `auth.getUser`, and every `agents`/`calls` row is scoped by `user_id`. The backend keeps the service key and filters explicitly; RLS policies on `user_id` exist as defense in depth. Signup is open to anyone who finds the backend URL — acceptable for now, no rate limiting yet.
+
+## ADR-7: In-call tools — the agent uses MCP while you talk
+
+MCP was a post-call path only: on hangup the digest was pushed to one chosen
+tool. That makes agentline a nice voice notebook, not a gateway. The value is
+in the call doing something — the benchmark against fonio.ai (`docs/FONIO_BENCHMARK.md`)
+put this first, and it is what separates agentline from ChatGPT Voice, which
+is free and preinstalled.
+
+So the user's connected MCP tools become function declarations on the live
+session, per agent.
+
+**Where the tools come from.** The tool list is cached on `mcp_connections.tools_json`
+when the user connects the server, and `call_tools` holds the subset they
+allowed in calls (null = all). Token minting reads the cached list, so
+enabling tools costs no round trip on the path that decides whether a call
+feels instant. A reconnect in the MCP sheet refreshes the cache.
+
+**Where they are injected.** Same split as ADR-3. OpenAI gets `tools` and
+`tool_choice: "auto"` baked into the client secret server-side, so the app
+never sees the list and cannot widen it. Gemini's session is configured by
+the client's setup message, so the backend returns the declarations next to
+`instructions` and `voice`, and the app merges them with `googleSearch`.
+Provider-specific shaping lives in `lib/tools.ts`: names are sanitized to
+`^[a-zA-Z0-9_-]{1,64}$` (deterministically, so the original is recovered by
+re-sanitizing the cached list — no mapping state), and JSON Schemas are
+reduced to the keyword subset both providers accept, since a stray `$schema`
+or `oneOf` makes Gemini reject the whole setup message.
+
+**Who executes them.** The app relays the model's function call to
+`POST /api/mcp/call`; the backend resolves the name against the allowed list,
+runs it over MCP and returns the text result. The MCP server URL and token
+never reach the device, exactly as API keys don't (ADR-3). Only the audio
+bypasses the backend.
+
+**Failures are spoken, not thrown.** A failed tool returns 200 with the error
+as its result, so the model says "that didn't work" instead of the app
+treating a broken calendar as a broken call. Tool latency and failure rate
+land in the `events` table as `tool_call` — the numbers that decide whether
+in-call tools feel instant or broken.
+
+Off by default per agent (`agents.tools_enabled`): an agent that had no reach
+into the user's accounts yesterday must not silently gain it.

@@ -5,6 +5,7 @@ import SwiftUI
 struct AgentEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: Agent
+    @State private var mcpConnection: MCPConnection?
     @State private var showAvatarPicker = false
     private let isNew: Bool
     private let records: [CallRecord]
@@ -74,7 +75,24 @@ struct AgentEditorView: View {
                         )
                     }
                 }
+
+                // In-call tools (ADR-7). Off by default: an agent should only
+                // reach the user's accounts when they said so.
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { draft.usesTools },
+                        set: { draft.toolsEnabled = $0 }
+                    )) {
+                        Label("Use my tools", systemImage: "wrench.and.screwdriver")
+                    }
+                    .disabled(callToolCount == 0)
+                } header: {
+                    Text("Tools")
+                } footer: {
+                    Text(toolsFooter)
+                }
             }
+            .task { await loadToolStatus() }
             .navigationTitle(isNew ? "New Agent" : "Edit Agent")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -101,6 +119,20 @@ struct AgentEditorView: View {
             return profile.name
         }
         return VoiceOption.all.first { $0.id == draft.voice }?.label ?? draft.voice
+    }
+
+    private var callToolCount: Int { mcpConnection?.activeCallTools.count ?? 0 }
+
+    private var toolsFooter: String {
+        guard let mcpConnection, callToolCount > 0 else {
+            return "Connect an MCP server under Settings › Tools, then this agent can use its tools while you talk."
+        }
+        let server = mcpConnection.serverName ?? "your MCP server"
+        return "\(callToolCount) tool\(callToolCount == 1 ? "" : "s") from \(server). The agent calls them during the call and tells you what it did."
+    }
+
+    private func loadToolStatus() async {
+        mcpConnection = try? await AppStore.backendIfConfigured()?.mcpStatus()
     }
 
     private func conversationRow(_ icon: String, _ title: String, _ value: String) -> some View {

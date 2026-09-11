@@ -20,6 +20,10 @@ enum VoiceSessionEvent {
     /// A `.transcript` event with the final text follows when it completes.
     case partialTranscript(String)
     case costTick(cents: Int)
+    /// The agent invoked one of the user's tools; the name is shown mid-call
+    /// so a pause has a visible reason (ADR-7).
+    case toolCall(name: String)
+    case toolResult(name: String, ok: Bool)
     case error(String)
 }
 

@@ -35,9 +35,10 @@ The iOS app uses a provider abstraction so realtime engines can evolve without c
 
 The core app, backend, multi-user auth, OpenAI/Gemini sessions, call history,
 summaries, memory, integrations, and StoreKit flows are implemented. Physical
-device end-to-end reliability, server-authoritative billing, durable background
-processing, security controls, legal/account controls, and operational
-observability remain release blockers.
+device end-to-end reliability—including live MCP tool calls on both voice
+providers—server-authoritative billing, durable background processing, security
+controls, legal/account controls, and operational observability remain release
+blockers.
 
 Before deploying or distributing the app, read:
 

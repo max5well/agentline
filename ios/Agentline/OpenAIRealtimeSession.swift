@@ -27,6 +27,9 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
     private var currentAgent: Agent?
     private var reconnectTask: Task<Void, Never>?
     private var didAttemptReconnect = false
+    // Function calls surface on two events; whichever lands first wins and
+    // the other is ignored (ADR-7).
+    private var handledToolCalls = Set<String>()
 
     init(backend: BackendClient, objective: String? = nil) {
         self.backend = backend
@@ -168,6 +171,51 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         continuation.finish()
     }
 
+    // MARK: - Tools (ADR-7)
+
+    private func sendClientEvent(_ event: [String: Any]) {
+        guard let channel = dataChannel, channel.readyState == .open,
+              let payload = try? JSONSerialization.data(withJSONObject: event) else { return }
+        channel.sendData(RTCDataBuffer(data: payload, isBinary: false))
+    }
+
+    // The model asked for one of the user's MCP tools. The backend holds the
+    // server credentials and runs it; the result goes back as a function call
+    // output, then the model is asked to speak again.
+    private func runTool(name: String, callId: String, argumentsJSON: String) {
+        guard !hasEnded, !handledToolCalls.contains(callId) else { return }
+        handledToolCalls.insert(callId)
+        continuation.yield(.toolCall(name: name))
+        continuation.yield(.state(.thinking))
+
+        Task { [weak self] in
+            guard let self else { return }
+            var output: String
+            var ok = true
+            do {
+                let response = try await self.backend.mcpCallTool(name: name, argumentsJSON: argumentsJSON)
+                output = response.result
+                ok = !response.isError
+            } catch {
+                log.error("tool call failed: \(error, privacy: .public)")
+                output = "The tool could not be reached: \(error.localizedDescription)"
+                ok = false
+            }
+            guard !self.hasEnded else { return }
+            self.continuation.yield(.toolResult(name: name, ok: ok))
+            self.sendClientEvent([
+                "type": "conversation.item.create",
+                "item": [
+                    "type": "function_call_output",
+                    "call_id": callId,
+                    "output": output,
+                ],
+            ])
+            // The model does not resume on its own after a tool output.
+            self.sendClientEvent(["type": "response.create"])
+        }
+    }
+
     // MARK: - Realtime server events (over the data channel)
 
     private func handleServerEvent(_ data: Data) {
@@ -199,6 +247,22 @@ final class OpenAIRealtimeSession: NSObject, VoiceSession {
         case "conversation.item.input_audio_transcription.completed":
             if let text = json["transcript"] as? String {
                 continuation.yield(.transcript(.init(role: "user", text: text, t: elapsed)))
+            }
+        case "response.function_call_arguments.done":
+            if let callId = json["call_id"] as? String,
+               let name = json["name"] as? String {
+                runTool(name: name, callId: callId,
+                        argumentsJSON: json["arguments"] as? String ?? "{}")
+            }
+        case "response.output_item.done":
+            // Carries the complete item, so it also covers models that omit
+            // the name from the arguments event.
+            if let item = json["item"] as? [String: Any],
+               item["type"] as? String == "function_call",
+               let callId = item["call_id"] as? String,
+               let name = item["name"] as? String {
+                runTool(name: name, callId: callId,
+                        argumentsJSON: item["arguments"] as? String ?? "{}")
             }
         case "response.done":
             agentSpeaking = false

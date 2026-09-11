@@ -93,8 +93,9 @@ extension ObsidianConnectSheet {
     }
 }
 
-// Connect flow for MCP: server URL + token, backend validates by
-// listing the tools, user picks the one that receives call digests.
+// Connect flow for MCP: server URL + token, backend validates by listing
+// the tools. The user then picks the one that receives call digests, and
+// which tools the agents may call during a conversation (ADR-7).
 struct MCPConnectSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var url = ""
@@ -102,6 +103,7 @@ struct MCPConnectSheet: View {
     @State private var tools: [MCPTool] = []
     @State private var serverName: String?
     @State private var selectedTool: String?
+    @State private var callTools: Set<String> = []
     @State private var busy = false
     @State private var errorMessage: String?
     let existing: MCPConnection?
@@ -120,7 +122,7 @@ struct MCPConnectSheet: View {
                 } header: {
                     Text("MCP server")
                 } footer: {
-                    Text("Any MCP server over Streamable HTTP. After every call, the summary, action items and transcript are sent to the tool you pick below.")
+                    Text("Any MCP server over Streamable HTTP. Its tools can be used by your agents during a call, and one of them can receive the summary after every call.")
                 }
 
                 Section {
@@ -143,6 +145,29 @@ struct MCPConnectSheet: View {
                 if !tools.isEmpty {
                     Section {
                         ForEach(tools) { tool in
+                            Toggle(isOn: Binding(
+                                get: { callTools.contains(tool.name) },
+                                set: { on in
+                                    if on { callTools.insert(tool.name) }
+                                    else { callTools.remove(tool.name) }
+                                }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(tool.name)
+                                    if let desc = tool.description {
+                                        Text(desc).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Tools your agents may use in calls")
+                    } footer: {
+                        Text("Enable \"Use my tools\" on an agent to let it call these while you talk. They act on your real accounts.")
+                    }
+
+                    Section {
+                        ForEach(tools) { tool in
                             Button {
                                 selectedTool = tool.name
                             } label: {
@@ -163,7 +188,7 @@ struct MCPConnectSheet: View {
                             }
                         }
                     } header: {
-                        Text("Tool that receives calls\(serverName.map { " · \($0)" } ?? "")")
+                        Text("Tool that receives call summaries\(serverName.map { " · \($0)" } ?? "")")
                     }
                 }
 
@@ -188,15 +213,17 @@ struct MCPConnectSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         Task {
+                            let backend = AppStore.backendIfConfigured()
                             if let selectedTool {
-                                try? await AppStore.backendIfConfigured()?.mcpSelectTool(selectedTool)
+                                try? await backend?.mcpSelectTool(selectedTool)
                             }
+                            try? await backend?.mcpSelectCallTools(Array(callTools))
                             onChange()
                             dismiss()
                         }
                     }
                     .bold()
-                    .disabled(selectedTool == nil)
+                    .disabled(selectedTool == nil && callTools.isEmpty)
                 }
             }
             .onAppear {
@@ -204,6 +231,10 @@ struct MCPConnectSheet: View {
                     url = existing.url
                     selectedTool = existing.toolName
                     serverName = existing.serverName
+                    // The backend caches the tool list, so reopening the sheet
+                    // shows it without another round trip to the server.
+                    tools = existing.tools ?? []
+                    callTools = Set(existing.callTools ?? tools.map(\.name))
                 }
             }
         }
@@ -217,6 +248,10 @@ struct MCPConnectSheet: View {
             let result = try await backend.mcpConnect(url: url, authToken: token)
             tools = result.tools
             serverName = result.serverName
+            // A freshly connected server offers everything until the user
+            // narrows it; re-listing keeps whatever they already chose.
+            let known = Set(tools.map(\.name))
+            callTools = callTools.isEmpty ? known : callTools.intersection(known)
             if tools.isEmpty { errorMessage = "Connected, but the server exposes no tools." }
         } catch {
             errorMessage = error.localizedDescription

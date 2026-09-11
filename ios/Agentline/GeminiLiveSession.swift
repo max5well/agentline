@@ -32,6 +32,8 @@ final class GeminiLiveSession: NSObject, VoiceSession {
     private var userUtterance = ""
     private var currentAgent: Agent?
     private var didAttemptReconnect = false
+    private var pendingToolCalls = Set<String>()
+    private var cancelledToolCalls = Set<String>()
 
     // Gemini Live audio contract: PCM16 in at 16 kHz, PCM16 out at 24 kHz.
     private let sendFormat = AVAudioFormat(
@@ -140,12 +142,24 @@ final class GeminiLiveSession: NSObject, VoiceSession {
                 // Google Search grounding — server-side tool, no client
                 // handling needed. The model only searches when the answer
                 // requires current information (verified to work with
-                // ephemeral tokens on the Constrained endpoint).
-                "tools": [["googleSearch": [:]]],
+                // ephemeral tokens on the Constrained endpoint). The user's
+                // MCP tools ride alongside as function declarations (ADR-7);
+                // those the app executes via the backend.
+                "tools": toolsPayload(token),
                 "inputAudioTranscription": [:],
                 "outputAudioTranscription": [:],
             ]
         ])
+    }
+
+    // Gemini takes one tools array holding both the built-in grounding tool
+    // and our function declarations.
+    private func toolsPayload(_ token: RealtimeToken) -> [[String: Any]] {
+        var tools: [[String: Any]] = [["googleSearch": [:]]]
+        if let declarations = token.tools, !declarations.isEmpty {
+            tools.append(["functionDeclarations": declarations.map(\.raw)])
+        }
+        return tools
     }
 
     private func send(json: [String: Any]) throws {
@@ -223,6 +237,18 @@ final class GeminiLiveSession: NSObject, VoiceSession {
             return
         }
 
+        // Tool calls arrive outside serverContent (ADR-7).
+        if let toolCall = json["toolCall"] as? [String: Any],
+           let calls = toolCall["functionCalls"] as? [[String: Any]] {
+            for call in calls { runTool(call) }
+            return
+        }
+        if json["toolCallCancellation"] != nil {
+            // The turn was interrupted; results for it are no longer wanted.
+            cancelledToolCalls.formUnion(pendingToolCalls)
+            return
+        }
+
         guard let content = json["serverContent"] as? [String: Any] else { return }
 
         if content["interrupted"] as? Bool == true {
@@ -282,6 +308,48 @@ final class GeminiLiveSession: NSObject, VoiceSession {
         guard !currentUtterance.isEmpty else { return }
         continuation.yield(.transcript(.init(role: "agent", text: currentUtterance, t: elapsed)))
         currentUtterance = ""
+    }
+
+    // MARK: - Tools (ADR-7)
+
+    // The backend holds the MCP server credentials and runs the tool; we
+    // return its output in the shape Gemini expects and the model carries on.
+    private func runTool(_ call: [String: Any]) {
+        guard !hasEnded, let name = call["name"] as? String else { return }
+        let id = call["id"] as? String
+        // Gemini sends args as an object; the backend takes the provider's
+        // own JSON so nothing is re-shaped on the way.
+        let args = call["args"] as? [String: Any] ?? [:]
+        let argumentsJSON = (try? JSONSerialization.data(withJSONObject: args))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+
+        if let id { pendingToolCalls.insert(id) }
+        continuation.yield(.toolCall(name: name))
+        continuation.yield(.state(.thinking))
+
+        Task { [weak self] in
+            guard let self else { return }
+            var output: String
+            var ok = true
+            do {
+                let response = try await self.backend.mcpCallTool(name: name, argumentsJSON: argumentsJSON)
+                output = response.result
+                ok = !response.isError
+            } catch {
+                log.error("tool call failed: \(error, privacy: .public)")
+                output = "The tool could not be reached: \(error.localizedDescription)"
+                ok = false
+            }
+            guard !self.hasEnded else { return }
+            if let id {
+                self.pendingToolCalls.remove(id)
+                guard self.cancelledToolCalls.remove(id) == nil else { return }
+            }
+            self.continuation.yield(.toolResult(name: name, ok: ok))
+            var response: [String: Any] = ["name": name, "response": ["result": output]]
+            if let id { response["id"] = id }
+            try? self.send(json: ["toolResponse": ["functionResponses": [response]]])
+        }
     }
 
     // MARK: - Audio

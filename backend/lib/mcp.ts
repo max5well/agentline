@@ -189,6 +189,20 @@ export async function callMCPTool(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any>,
 ): Promise<void> {
+  await callMCPToolForResult(url, authToken, toolName, args);
+}
+
+// Same call, but the tool's output comes back as text — the in-call path
+// (ADR-7), where the result is spoken to the caller. One initialize per
+// call: MCP sessions are per-connection and a voice call fires a tool
+// every few turns at most, so pooling would buy little and leak sessions.
+export async function callMCPToolForResult(
+  url: string,
+  authToken: string,
+  toolName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  args: Record<string, any>,
+): Promise<string> {
   const init = await rpc(
     url,
     authToken,
@@ -223,4 +237,30 @@ export async function callMCPTool(
     2,
   );
   if (result.body?.error) throw new Error(result.body.error.message);
+  return flattenContent(result.body?.result);
+}
+
+// MCP returns a content array of typed blocks. The model only needs the
+// readable part; non-text blocks are named so it can say what came back
+// instead of pretending nothing did.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenContent(result: any): string {
+  if (!result) return "Done.";
+  if (result.isError) {
+    const message = flattenContent({ content: result.content });
+    throw new Error(message || "Tool reported an error");
+  }
+  const content = result.content;
+  if (!Array.isArray(content)) {
+    return typeof result === "string" ? result : JSON.stringify(result);
+  }
+  const parts = content
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((block: any) => {
+      if (typeof block?.text === "string") return block.text;
+      if (block?.type) return `[${block.type} content]`;
+      return "";
+    })
+    .filter(Boolean);
+  return parts.join("\n").trim() || "Done.";
 }

@@ -9,6 +9,13 @@ import {
   remainingQuota,
 } from "@/lib/billing";
 import { resolveGeminiVoice, resolveOpenAIVoice } from "@/lib/voices";
+import {
+  loadCallTools,
+  toGeminiTools,
+  toOpenAITools,
+  toolInstructions,
+  type CallTools,
+} from "@/lib/tools";
 
 const GEMINI_31 = "gemini-3.1-flash-live-preview";
 const GEMINI_25 = "gemini-2.5-flash-native-audio-preview-12-2025";
@@ -168,21 +175,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const instructions = buildInstructions(agent, memory, objective);
+  // In-call tools (ADR-7): opt-in per agent, read from the tool list cached
+  // on the connection so this adds no network round trip to call setup.
+  const callTools = agent.tools_enabled
+    ? await loadCallTools(auth.userId ?? null)
+    : null;
+
+  let instructions = buildInstructions(agent, memory, objective);
+  if (callTools) instructions += toolInstructions(callTools.tools);
+
   // Keep the Fast tier available when Gemini is not configured.
   if (isGemini && !process.env.GEMINI_API_KEY) {
     console.warn(`GEMINI_API_KEY not set, falling back to ${OPENAI_FAST}`);
-    return mintOpenAI(OPENAI_FAST, instructions, agent.voice);
+    return mintOpenAI(OPENAI_FAST, instructions, agent.voice, callTools);
   }
   return isGemini
-    ? mintGemini(model, instructions, agent.voice)
-    : mintOpenAI(model, instructions, agent.voice);
+    ? mintGemini(model, instructions, agent.voice, callTools)
+    : mintOpenAI(model, instructions, agent.voice, callTools);
 }
 
 async function mintOpenAI(
   model: string,
   instructions: string,
   rawVoice: string,
+  callTools: CallTools | null = null,
 ) {
   const voice = resolveOpenAIVoice(rawVoice);
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -201,6 +217,14 @@ async function mintOpenAI(
           input: { transcription: { model: "whisper-1" } },
           output: { voice },
         },
+        // Baked into the secret like the persona, so the app never sees the
+        // tool list and can't widen it (ADR-3).
+        ...(callTools
+          ? {
+              tools: toOpenAITools(callTools.tools),
+              tool_choice: "auto",
+            }
+          : {}),
       },
     }),
   });
@@ -220,10 +244,16 @@ async function mintOpenAI(
     expiresAt: secret.expires_at,
     model,
     provider: "openai-realtime",
+    toolCount: callTools?.tools.length ?? 0,
   });
 }
 
-async function mintGemini(model: string, instructions: string, voice: string) {
+async function mintGemini(
+  model: string,
+  instructions: string,
+  voice: string,
+  callTools: CallTools | null = null,
+) {
   if (!process.env.GEMINI_API_KEY) {
     console.error("GEMINI_API_KEY not set");
     return NextResponse.json(
@@ -267,8 +297,11 @@ async function mintGemini(model: string, instructions: string, voice: string) {
     model,
     provider: "gemini-live",
     // Gemini sessions are configured by the client's setup message, so the
-    // app needs these; OpenAI bakes them into the secret server-side.
+    // app needs these; OpenAI bakes them into the secret server-side. Same
+    // for the function declarations — the app merges them with googleSearch.
     instructions,
     voice: resolveGeminiVoice(voice),
+    tools: callTools ? toGeminiTools(callTools.tools) : null,
+    toolCount: callTools?.tools.length ?? 0,
   });
 }

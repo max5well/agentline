@@ -31,6 +31,11 @@ struct Agent: Identifiable, Codable, Hashable {
     var vocabulary: [String]? = nil
     /// Route current-information calls through a grounded provider.
     var webGroundingEnabled: Bool? = false
+    /// In-call MCP tools (ADR-7). Optional so rows from a pre-0011 backend
+    /// still decode; nil reads as off.
+    var toolsEnabled: Bool? = nil
+
+    var usesTools: Bool { toolsEnabled ?? false }
 
     /// Comma-separated list in `language`; first entry is the default.
     var languages: [String] {
@@ -48,6 +53,64 @@ struct Agent: Identifiable, Codable, Hashable {
         case memoryEnabled = "memory_enabled"
         case vocabulary
         case webGroundingEnabled = "web_grounding_enabled"
+        case toolsEnabled = "tools_enabled"
+    }
+}
+
+// Minimal JSON tree. The Gemini setup message is assembled with
+// JSONSerialization, so the function declarations the backend mints have to
+// survive Codable and come back out as plain Foundation objects.
+enum JSONValue: Codable, Hashable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case object([String: JSONValue])
+    case array([JSONValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "unsupported JSON value")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let v): try container.encode(v)
+        case .number(let v): try container.encode(v)
+        case .bool(let v): try container.encode(v)
+        case .object(let v): try container.encode(v)
+        case .array(let v): try container.encode(v)
+        case .null: try container.encodeNil()
+        }
+    }
+
+    /// Foundation representation for JSONSerialization. Explicit returns:
+    /// the branches have different types, which a switch expression can't
+    /// unify even with `Any` as the declared result.
+    var raw: Any {
+        switch self {
+        case .string(let v): return v
+        case .number(let v): return v
+        case .bool(let v): return v
+        case .object(let v): return v.mapValues(\.raw)
+        case .array(let v): return v.map(\.raw)
+        case .null: return NSNull()
+        }
     }
 }
 
