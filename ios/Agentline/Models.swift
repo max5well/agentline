@@ -31,7 +31,7 @@ struct Agent: Identifiable, Codable, Hashable {
     var vocabulary: [String]? = nil
     /// Route current-information calls through a grounded provider.
     var webGroundingEnabled: Bool? = false
-    /// In-call MCP tools (ADR-7). Optional so rows from a pre-0011 backend
+    /// In-call MCP tools (ADR-7). Optional so rows from a pre-0015 backend
     /// still decode; nil reads as off.
     var toolsEnabled: Bool? = nil
 

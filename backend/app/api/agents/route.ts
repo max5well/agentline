@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
   if (body.web_grounding_enabled !== undefined)
     row.web_grounding_enabled = Boolean(body.web_grounding_enabled);
-  // Migration 0011 (ADR-7).
+  // Migration 0015 (ADR-7).
   if (body.tools_enabled !== undefined) row.tools_enabled = body.tools_enabled;
 
   const { data, error } = await supabase()

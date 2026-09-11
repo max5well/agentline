@@ -55,7 +55,7 @@ export async function loadCallTools(
       tools: tools.slice(0, 24),
     };
   } catch (e) {
-    console.warn("loadCallTools failed (run migration 0011?):", e);
+    console.warn("loadCallTools failed (run migration 0015?):", e);
     return null;
   }
 }

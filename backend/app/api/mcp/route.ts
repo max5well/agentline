@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
     };
     let { error } = await supabase().from("mcp_connections").upsert(row);
     if (error && /tools_json/.test(error.message)) {
-      // Pre-0011 schema: connecting still works, in-call tools stay off.
-      console.warn("mcp_connections has no tools_json (run migration 0011?)");
+      // Pre-0015 schema: connecting still works, in-call tools stay off.
+      console.warn("mcp_connections has no tools_json (run migration 0015?)");
       delete row.tools_json;
       ({ error } = await supabase().from("mcp_connections").upsert(row));
     }

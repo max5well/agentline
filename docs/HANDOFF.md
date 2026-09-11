@@ -23,7 +23,7 @@ What is **not** verified, at all:
   with no Xcode)
 - `npx next build` has never run on this change (the sandbox has no npm
   registry access)
-- migration 0011 has not been applied to Supabase
+- migration 0015 has not been applied to Supabase
 - no call has ever been made with tools enabled, on either provider
 
 So treat everything below Task 1 as blocked until Task 1 is done.
@@ -35,10 +35,10 @@ call has successfully used a real tool on both providers.
 
 ### 1.1 Database
 
-Apply `supabase/migrations/0011_in_call_tools.sql`. It adds
+Apply `supabase/migrations/0015_in_call_tools.sql`. It adds
 `agents.tools_enabled`, `mcp_connections.tools_json` and
 `mcp_connections.call_tools`. Every backend read of those columns is
-defensive (a pre-0011 schema degrades to "no tools" rather than failing),
+defensive (a pre-0015 schema degrades to "no tools" rather than failing),
 so if tools silently never appear, check the migration actually ran.
 
 ### 1.2 Backend
